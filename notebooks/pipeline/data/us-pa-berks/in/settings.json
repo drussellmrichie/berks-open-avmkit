@@ -1,0 +1,245 @@
+{
+  "locality": {
+    "name": "Berks County",
+    "county": "Berks",
+    "state": "PA",
+    "slug": "us-pa-berks"
+  },
+  "data": {
+    "load": {
+      "geo_parcels": {
+        "filename": "berks_parcels.parquet",
+        "dupes": {"subset": ["key"], "drop": true},
+        "load": {
+          "key":                    ["parcel_number",            "str"],
+          "land_area_sqft":         ["total_area",               "float"],
+          "bldg_area_finished_sqft":["total_livable_area",       "float"],
+          "bldg_year_built":        ["year_built",               "float"],
+          "bldg_condition_num":     ["exterior_condition",       "float"],
+          "bldg_quality_num":       ["bldg_quality_num",         "float"],
+          "bldg_rooms_bed":         ["number_of_bedrooms",       "float"],
+          "bldg_rooms_bath":        ["number_of_bathrooms",      "float"],
+          "bldg_stories":           ["number_stories",           "float"],
+          "bldg_type":              ["building_code_description", "str"],
+          "category_code":          ["category_code",            "str"],
+          "zoning":                 ["zoning",                   "str"],
+          "neighborhood":           ["neighborhood",             "str"],
+          "census_tract":           ["census_tract",             "str"],
+          "assr_land_value":        ["taxable_land",             "float"],
+          "assr_impr_value":        ["taxable_building",         "float"],
+          "assr_market_value":      ["market_value",             "float"],
+          "is_vacant":              ["is_vacant",                "bool"]
+        }
+      },
+      "sales": {
+        "filename": "sales.parquet",
+        "load": {
+          "key_sale":    ["key_sale",    "str"],
+          "key":         ["key",         "str"],
+          "sale_date":   ["sale_date",   "datetime", "%Y-%m-%d"],
+          "sale_price":  ["sale_price",  "float"],
+          "valid_sale":  ["valid_sale",  "bool"],
+          "vacant_sale": ["vacant_sale", "bool"]
+        }
+      }
+    },
+    "process": {
+      "merge": {
+        "universe": ["geo_parcels"],
+        "sales":    [{"id": "sales", "dupes": "allow"}]
+      },
+      "enrich": {
+        "census": {
+          "enabled": true,
+          "fips": "42011"
+        },
+        "osm": {
+          "enabled": true
+        }
+      },
+      "dupes": {
+        "universe": {"subset": ["key"], "drop": true},
+        "sales":    {"subset": ["key_sale"], "drop": true}
+      },
+      "fill": {
+        "median_impr": [
+          "bldg_quality_num",
+          "bldg_condition_num",
+          "bldg_stories",
+          "bldg_rooms_bath",
+          "bldg_rooms_bed"
+        ],
+        "zero": [
+          "bldg_area_finished_sqft"
+        ]
+      }
+    }
+  },
+  "modeling": {
+    "metadata": {
+      "valuation_date": "2026-01-01",
+      "use_sales_from": 2022,
+      "modeler": "MUSA",
+      "modeler_nick": "musa"
+    },
+    "try_variables": {
+      "variables": [
+        "land_area_sqft",
+        "land_area_sqft_log",
+        "bldg_area_finished_sqft",
+        "bldg_age_years",
+        "bldg_condition_num",
+        "bldg_quality_num",
+        "bldg_rooms_bed",
+        "bldg_rooms_bath",
+        "bldg_stories",
+        "latitude_norm",
+        "longitude_norm",
+        "polar_angle",
+        "polar_radius",
+        "geom_rectangularity_num",
+        "geom_aspect_ratio",
+        "dist_to_cbd",
+        "neighborhood",
+        "census_tract",
+        "zoning",
+        "bldg_type"
+      ]
+    },
+    "instructions": {
+      "main": {
+        "run": ["lightgbm"]
+      },
+      "vacant": {
+        "run": ["lightgbm"]
+      },
+      "hedonic": {
+        "run": []
+      },
+      "time_adjustment": {
+        "period": "Q"
+      },
+      "ensemble": [],
+      "allocation": []
+    },
+    "models": {
+      "main": {
+        "default": {
+          "ind_vars": [
+            "bldg_area_finished_sqft",
+            "land_area_sqft",
+            "bldg_quality_num",
+            "bldg_condition_num",
+            "bldg_age_years",
+            "bldg_rooms_bed",
+            "bldg_rooms_bath",
+            "bldg_stories",
+            "dist_to_cbd",
+            "latitude_norm",
+            "longitude_norm",
+            "polar_radius",
+            "polar_angle",
+            "geom_aspect_ratio",
+            "neighborhood"
+          ]
+        }
+      },
+      "vacant": {
+        "default": {
+          "ind_vars": [
+            "land_area_sqft",
+            "land_area_sqft_log",
+            "latitude_norm",
+            "longitude_norm",
+            "polar_angle",
+            "polar_radius",
+            "geom_rectangularity_num",
+            "dist_to_cbd",
+            "neighborhood"
+          ]
+        }
+      },
+      "hedonic": {
+        "default": {
+          "ind_vars": [
+            "bldg_area_finished_sqft",
+            "land_area_sqft",
+            "bldg_quality_num",
+            "bldg_condition_num",
+            "bldg_age_years",
+            "dist_to_cbd",
+            "latitude_norm",
+            "longitude_norm",
+            "polar_radius",
+            "polar_angle"
+          ]
+        }
+      }
+    },
+    "model_groups": {
+      "residential_sf": {
+        "name": "Residential single-family",
+        "filter": ["==", "category_code", "str:101"]
+      },
+      "residential_mf": {
+        "name": "Residential multi-family",
+        "filter": ["isin", "category_code", ["210", "220"]]
+      },
+      "commercial": {
+        "name": "Commercial/Industrial",
+        "filter": ["isin", "category_code", ["400", "401", "402", "403", "404", "405"]]
+      },
+      "vacant": {
+        "name": "Vacant land",
+        "filter": ["==", "is_vacant", true]
+      }
+    }
+  },
+  "analysis": {
+    "ratio_study": {
+      "look_back_years": 1,
+      "breakdowns": [
+        {"by": "sale_price",              "quantiles": 10},
+        {"by": "bldg_area_finished_sqft", "quantiles": 10},
+        {"by": "bldg_age_years",          "slice_size": 10},
+        {"by": "land_area_sqft",          "quantiles": 10},
+        {"by": "bldg_quality_num",        "quantiles": 5},
+        {"by": "bldg_condition_num",      "quantiles": 5},
+        {"by": "<loc_neighborhood>"},
+        {"by": "<loc_market_area>"}
+      ]
+    }
+  },
+  "field_classification": {
+    "important": {
+      "fields": {
+        "impr_category":   "bldg_type",
+        "land_category":   "category_code",
+        "loc_neighborhood":"neighborhood",
+        "loc_market_area": "census_tract"
+      },
+      "locations": [
+        "neighborhood",
+        "census_tract",
+        "zoning"
+      ]
+    },
+    "land": {
+      "numeric":     ["land_area_sqft"],
+      "categorical": ["zoning", "neighborhood", "census_tract"]
+    },
+    "impr": {
+      "numeric": [
+        "bldg_area_finished_sqft",
+        "bldg_age_years",
+        "bldg_condition_num",
+        "bldg_quality_num",
+        "bldg_rooms_bed",
+        "bldg_rooms_bath",
+        "bldg_stories"
+      ],
+      "categorical": ["bldg_type"]
+    }
+  },
+  "data_dictionary": {}
+}
