@@ -54,8 +54,8 @@ berks-open-avmkit/
 
 | Script | Status | Purpose |
 |---|---|---|
-| `download_berks_parcels.py` | **TODO** | Download Berks County parcel polygons + assessment attributes |
-| `process_berks.py` | **TODO** | Process parcels + sales into `berks_parcels.parquet` + `sales.parquet` |
+| `download_berks_parcels.py` | **Partial** | Downloads parcel geometry + assessed values from Berks County GIS; building attributes pending CAMA Residential join |
+| `process_berks.py` | **TODO** | Process sales/RTT data into `sales.parquet` (parcel download now handled by `download_berks_parcels.py`) |
 | `run_01_assemble.py` | Ready | Merge parcels + sales; tag model groups; enrich with census/OSM |
 | `run_02_clean.py` | Ready | Horizontal equity clustering; sales scrutiny; null-fill |
 | `run_03_model.py` | Ready | Berks enrichment + LightGBM training + SHAP writing |
@@ -98,30 +98,34 @@ berks-open-avmkit/
 Location: `notebooks/pipeline/data/us-pa-berks/in/settings.json`
 
 #### `data.load`
-Maps standardized openavmkit field names (left) to raw Berks source column names (right):
+`download_berks_parcels.py` outputs `berks_parcels.parquet` with standardized column names already applied, so `settings.json` uses identity mappings. The source → standardized mapping lives entirely in `FIELD_MAP` in the download script.
 
-| Standardized field | Source column (placeholder) | Notes |
-|---|---|---|
-| `key` | `parcel_number` | Unique parcel ID |
-| `land_area_sqft` | `total_area` | |
-| `bldg_area_finished_sqft` | `total_livable_area` | |
-| `bldg_year_built` | `year_built` | |
-| `bldg_condition_num` | `exterior_condition` | Likely numeric in Berks (no letter-grade mapping needed) |
-| `bldg_quality_num` | `bldg_quality_num` | Same; verify field name |
-| `bldg_rooms_bed` | `number_of_bedrooms` | |
-| `bldg_rooms_bath` | `number_of_bathrooms` | |
-| `bldg_stories` | `number_stories` | |
-| `bldg_type` | `building_code_description` | |
-| `category_code` | `category_code` | PA standard codes — verify against actual data |
-| `zoning` | `zoning` | |
-| `neighborhood` | `neighborhood` | Use municipality code, zip, or census tract if unavailable |
-| `census_tract` | `census_tract` | |
-| `assr_land_value` | `taxable_land` | |
-| `assr_impr_value` | `taxable_building` | |
-| `assr_market_value` | `market_value` | |
-| `is_vacant` | `is_vacant` | Derive from category_code or zero livable area if absent |
+Confirmed source columns (from Berks County GIS server, verified against live data):
 
-**These right-hand values are Philadelphia OPA placeholders — update once actual Berks column names are known.**
+| Standardized field | Source column | Origin | Status |
+|---|---|---|---|
+| `key` | `PROPID` | Parcel layer (Layer 0) | Confirmed |
+| `land_area_sqft` | `ACREAGE` × 43,560 | Parcel layer | Confirmed |
+| `neighborhood` | `MUNICIPALNAME` | Parcel layer | Confirmed |
+| `category_code` | `CLASS` | Parcel layer | Confirmed — verify actual code values |
+| `assr_land_value` | `LAND_VALUE` | CAMA_Master (Layer 3) | Confirmed |
+| `assr_impr_value` | `BLDG_VALUE` | CAMA_Master | Confirmed |
+| `assr_market_value` | `TOT_VALUE` | CAMA_Master | Confirmed |
+| `bldg_area_finished_sqft` | `SFLA` | CAMA Residential (pending) | Placeholder |
+| `bldg_year_built` | `YRBLT` | CAMA Residential (pending) | Placeholder |
+| `bldg_condition_num` | `CONDITION` | CAMA Residential (pending) | Placeholder |
+| `bldg_quality_num` | `GRADE` | CAMA Residential (pending) | Placeholder |
+| `bldg_rooms_bed` | `RMBED` | CAMA Residential (pending) | Placeholder |
+| `bldg_rooms_bath` | `FIXBATH` | CAMA Residential (pending) | Placeholder |
+| `bldg_stories` | `STORY` | CAMA Residential (pending) | Placeholder |
+| `bldg_type` | `STYLE` | CAMA Residential (pending) | Placeholder |
+| `census_tract` | `census_tract` | Added by openavmkit Census enrichment | Auto |
+| `is_vacant` | Derived | From `CLASS` prefix "7" or zero sqft | Derived |
+
+**Zoning is not available in the Berks GIS data and has been removed from the model.**
+
+CAMA Residential FeatureServer: `https://services3.arcgis.com/dGYe1jDYrTw1wwpc/arcgis/rest/services/Berks_Assessment_CAMA_Residential_File/FeatureServer/15`
+CAMA data dictionary PDF: in `data/us-pa-berks/in/` (downloaded from opendata.berkspa.gov)
 
 #### `data.process`
 - **Census enrichment:** FIPS `42011`
@@ -181,23 +185,21 @@ The same patches applied to `philly_open_avmkit` are required here. See `philly_
 | `modeling.py` | `_contrib_to_unit_values`, `_add_prediction_to_contribution` |
 | `pipeline.py` | `finalize_models` |
 
-### Data Acquisition (Critical Blocker)
+### Data Acquisition Status
 
-**The pipeline cannot run until parcel and sales data are obtained and processed.**
+**Parcel data** — `download_berks_parcels.py` is partially implemented:
+- Downloads 156,778 parcel polygons from `gis.co.berks.pa.us/arcgis/rest/services/Assess/ParcelSearchTable/MapServer` (Layer 0)
+- Joins CAMA_Master attributes (Layer 3) on `PROPID`/`PARID`
+- **Still needed:** join CAMA Residential data for building attributes (sqft, year built, condition, quality, bedrooms, bathrooms, stories, type)
+  - FeatureServer: `https://services3.arcgis.com/dGYe1jDYrTw1wwpc/arcgis/rest/services/Berks_Assessment_CAMA_Residential_File/FeatureServer/15`
+  - Field names are placeholders pending verification against CAMA data dictionary PDF
 
-1. **Parcel geometry + attributes** — options in `download_berks_parcels.py`:
-   - PASDA (PA Spatial Data Access): `https://www.pasda.psu.edu/`
-   - Berks County Open Data Hub: `https://opendata.berkspa.gov`
-   - Direct GIS request: `gis@berkspa.gov`
+**Sales/RTT data** — `process_berks.py` not yet implemented:
+- No confirmed public bulk API
+- Berks County Recorder of Deeds: `https://www.berkspa.gov/departments/recorder-of-deeds`
+- PA Dept of Revenue RETR data (Realty Transfer Certificate of Return)
 
-2. **Sales/RTT data** — no confirmed public bulk API:
-   - Berks County Recorder of Deeds: `https://www.berkspa.gov/departments/recorder-of-deeds`
-   - PA Dept of Revenue RETR data (Realty Transfer Certificate of Return)
-
-3. **Once data is in hand:**
-   - Update `data.load` source column names in `settings.json` to match actual Berks field names
-   - Implement `download_berks_parcels.py` and `process_berks.py`
-   - Verify PA property class codes against actual data and update `model_groups` if needed
+**Outstanding:** Verify `CLASS` code values against actual data and update `model_groups` in `settings.json` if PA standard codes differ from assumed values (101=SF, 210/220=MF, 400-405=Commercial).
 
 ### Required Input Data Schemas
 
