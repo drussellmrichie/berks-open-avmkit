@@ -11,23 +11,21 @@
         "filename": "berks_parcels.parquet",
         "dupes": {"subset": ["key"], "drop": true},
         "load": {
-          "key":                    ["parcel_number",            "str"],
-          "land_area_sqft":         ["total_area",               "float"],
-          "bldg_area_finished_sqft":["total_livable_area",       "float"],
-          "bldg_year_built":        ["year_built",               "float"],
-          "bldg_condition_num":     ["exterior_condition",       "float"],
-          "bldg_quality_num":       ["bldg_quality_num",         "float"],
-          "bldg_rooms_bed":         ["number_of_bedrooms",       "float"],
-          "bldg_rooms_bath":        ["number_of_bathrooms",      "float"],
-          "bldg_stories":           ["number_stories",           "float"],
-          "bldg_type":              ["building_code_description", "str"],
+          "key":                    ["key",                      "str"],
+          "land_area_sqft":         ["land_area_sqft",           "float"],
+          "bldg_area_finished_sqft":["bldg_area_finished_sqft",  "float"],
+          "bldg_year_built":        ["bldg_year_built",          "float"],
+          "bldg_condition_num":     ["bldg_condition_num",       "float"],
+          "bldg_rooms_bed":         ["bldg_rooms_bed",           "float"],
+          "bldg_rooms_bath":        ["bldg_rooms_bath",          "float"],
+          "bldg_stories":           ["bldg_stories",             "float"],
+          "bldg_type":              ["bldg_type",                "str"],
           "category_code":          ["category_code",            "str"],
-          "zoning":                 ["zoning",                   "str"],
           "neighborhood":           ["neighborhood",             "str"],
           "census_tract":           ["census_tract",             "str"],
-          "assr_land_value":        ["taxable_land",             "float"],
-          "assr_impr_value":        ["taxable_building",         "float"],
-          "assr_market_value":      ["market_value",             "float"],
+          "assr_land_value":        ["assr_land_value",          "float"],
+          "assr_impr_value":        ["assr_impr_value",          "float"],
+          "assr_market_value":      ["assr_market_value",        "float"],
           "is_vacant":              ["is_vacant",                "bool"]
         }
       },
@@ -63,7 +61,6 @@
       },
       "fill": {
         "median_impr": [
-          "bldg_quality_num",
           "bldg_condition_num",
           "bldg_stories",
           "bldg_rooms_bath",
@@ -89,7 +86,6 @@
         "bldg_area_finished_sqft",
         "bldg_age_years",
         "bldg_condition_num",
-        "bldg_quality_num",
         "bldg_rooms_bed",
         "bldg_rooms_bath",
         "bldg_stories",
@@ -102,7 +98,6 @@
         "dist_to_cbd",
         "neighborhood",
         "census_tract",
-        "zoning",
         "bldg_type"
       ]
     },
@@ -128,7 +123,6 @@
           "ind_vars": [
             "bldg_area_finished_sqft",
             "land_area_sqft",
-            "bldg_quality_num",
             "bldg_condition_num",
             "bldg_age_years",
             "bldg_rooms_bed",
@@ -164,7 +158,6 @@
           "ind_vars": [
             "bldg_area_finished_sqft",
             "land_area_sqft",
-            "bldg_quality_num",
             "bldg_condition_num",
             "bldg_age_years",
             "dist_to_cbd",
@@ -178,16 +171,16 @@
     },
     "model_groups": {
       "residential_sf": {
-        "name": "Residential single-family",
-        "filter": ["==", "category_code", "str:101"]
+        "name": "Residential (CLASS=R)",
+        "filter": ["==", "category_code", "str:R"]
       },
       "residential_mf": {
-        "name": "Residential multi-family",
-        "filter": ["isin", "category_code", ["210", "220"]]
+        "name": "Apartment (CLASS=A)",
+        "filter": ["==", "category_code", "str:A"]
       },
       "commercial": {
-        "name": "Commercial/Industrial",
-        "filter": ["isin", "category_code", ["400", "401", "402", "403", "404", "405"]]
+        "name": "Commercial/Industrial (CLASS=C or I)",
+        "filter": ["isin", "category_code", ["C", "I"]]
       },
       "vacant": {
         "name": "Vacant land",
@@ -203,7 +196,6 @@
         {"by": "bldg_area_finished_sqft", "quantiles": 10},
         {"by": "bldg_age_years",          "slice_size": 10},
         {"by": "land_area_sqft",          "quantiles": 10},
-        {"by": "bldg_quality_num",        "quantiles": 5},
         {"by": "bldg_condition_num",      "quantiles": 5},
         {"by": "<loc_neighborhood>"},
         {"by": "<loc_market_area>"}
@@ -220,20 +212,18 @@
       },
       "locations": [
         "neighborhood",
-        "census_tract",
-        "zoning"
+        "census_tract"
       ]
     },
     "land": {
       "numeric":     ["land_area_sqft"],
-      "categorical": ["zoning", "neighborhood", "census_tract"]
+      "categorical": ["neighborhood", "census_tract"]
     },
     "impr": {
       "numeric": [
         "bldg_area_finished_sqft",
         "bldg_age_years",
         "bldg_condition_num",
-        "bldg_quality_num",
         "bldg_rooms_bed",
         "bldg_rooms_bath",
         "bldg_stories"

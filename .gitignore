@@ -1,4 +1,5 @@
 # Data files (large binary/generated — not for git)
+notebooks/pipeline/data/**/*.geojson
 notebooks/pipeline/data/**/*.parquet
 notebooks/pipeline/data/**/*.pkl
 notebooks/pipeline/data/**/*.csv
