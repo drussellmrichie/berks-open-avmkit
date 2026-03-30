@@ -12,14 +12,14 @@ Data sources (all downloaded programmatically via ArcGIS REST API)
 
 2. CAMA_Master assessment data
    Berks County GIS — ParcelSearchTable MapServer, Layer 3
-   Fields used: PARID, LAND_VALUE, BLDG_VALUE, TOTAL_VALUE,
-                PRICE, SALEDT, SALEYR1-3, SALEMTH1-3, SALEPR1-3
+   Fields used: PARID, LAND_VALUE, BLDG_VALUE, TOTAL_VALUE
 
-3. CAMA Residential building attributes
+3. CAMA Residential building attributes + sale history
    Berks County ArcGIS Online FeatureServer, Layer 15
    https://services3.arcgis.com/dGYe1jDYrTw1wwpc/arcgis/rest/services/
        Berks_Assessment_CAMA_Residential_File/FeatureServer/15
-   Fields used: PARID, SFLA, YRBLT, PHYCOND, BEDROOMS, FULLBATHS, STORIES, STYLE
+   Fields used: PARID, SFLA, YRBLT, PHYCOND, BEDROOMS, FULLBATHS, STORIES, STYLE,
+                PRICE, SALEDT, SALEYR1-3, SALEMTH1-3, SALEPR1-3
 
 Field names confirmed against Berks CAMA Exports Metadata PDF (1/6/2023).
 
@@ -225,9 +225,9 @@ def _safe_float(val) -> float | None:
 
 def _extract_sales(cama: pd.DataFrame) -> pd.DataFrame:
     """
-    Build a sales table from CAMA_Master sale history fields.
+    Build a sales table from CAMA Residential sale history fields.
 
-    Each CAMA_Master record can have:
+    Each CAMA Residential record can have:
       - Most recent sale: PRICE (NUMBER), SALEDT (DATE as ms-epoch)
       - Historical sales: SALEYR1-3 (TEXT year), SALEMTH1-3 (TEXT month), SALEPR1-3 (NUMBER)
 
@@ -329,6 +329,17 @@ def main():
     cama_res = _features_to_df(res_features)
     print(f"  Columns: {sorted(cama_res.columns.tolist())}")
 
+    # -----------------------------------------------------------------------
+    # Step 4: Extract sales from CAMA Residential (before dedup)
+    # -----------------------------------------------------------------------
+    # Sale history fields (PRICE/SALEDT/SALEYR1-3/etc.) live in CAMA Residential,
+    # not CAMA_Master. Extract from all cards BEFORE deduplicating so that sale
+    # history on secondary cards (lower SFLA) is not lost.
+    print(f"\n{'='*60}")
+    print("Step 4: Extract sales from CAMA Residential (before dedup)")
+    sales = _extract_sales(cama_res)
+    print(f"  {len(sales):,} sale records (year >= {SALES_MIN_YEAR})")
+
     # For parcels with multiple cards (TOTCARDS > 1), keep the card with the
     # largest finished area (primary structure).
     if "PARID" in cama_res.columns and "SFLA" in cama_res.columns:
@@ -338,14 +349,6 @@ def main():
                     .drop_duplicates(subset=["PARID"], keep="first")
         )
         print(f"  After dedup on PARID (keep max SFLA): {len(cama_res):,} rows")
-
-    # -----------------------------------------------------------------------
-    # Step 4: Extract sales from CAMA_Master
-    # -----------------------------------------------------------------------
-    print(f"\n{'='*60}")
-    print("Step 4: Extract sales from CAMA_Master")
-    sales = _extract_sales(cama)
-    print(f"  {len(sales):,} sale records (year >= {SALES_MIN_YEAR})")
     print(f"  Valid (>= $10k): {sales['valid_sale'].sum():,}")
 
     # -----------------------------------------------------------------------
