@@ -40,7 +40,7 @@ berks-open-avmkit/
 ├── .gitignore
 └── notebooks/pipeline/
     ├── init_notebooks.py             # Environment setup utility (used internally)
-    ├── download_berks_parcels.py     # Data acquisition stub — NOT YET IMPLEMENTED
+    ├── download_berks_parcels.py     # Data acquisition — downloads parcels, CAMA, and sales via ArcGIS REST
     ├── process_berks.py              # Data processing stub — NOT YET IMPLEMENTED
     ├── run_01_assemble.py            # Pipeline stage 1: assemble
     ├── run_02_clean.py               # Pipeline stage 2: clean

@@ -24,7 +24,6 @@ CITY_HALL_LON = -75.9269
 
 # Improved-parcel building fields to fill with per-model-group median
 _IMPR_FILL_MEDIAN = [
-    "bldg_quality_num",
     "bldg_condition_num",
     "bldg_stories",
     "bldg_rooms_bath",
