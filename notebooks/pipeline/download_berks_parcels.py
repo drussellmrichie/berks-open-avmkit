@@ -1,49 +1,47 @@
 """
-Download Berks County parcel polygons + CAMA assessment attributes and write
-berks_parcels.parquet.
+Download Berks County parcel data and write:
+  - berks_parcels.parquet  (universe of all parcels)
+  - sales.parquet          (sales extracted from CAMA_Master history)
 
-Data sources
-------------
+Data sources (all downloaded programmatically via ArcGIS REST API)
+------------------------------------------------------------------
 1. Parcel geometry + base attributes
-   Berks County GIS — ParcelSearchTable MapServer, Layer 0 (Parcels)
+   Berks County GIS — ParcelSearchTable MapServer, Layer 0
    https://gis.co.berks.pa.us/arcgis/rest/services/Assess/ParcelSearchTable/MapServer/0
-   Fields confirmed: PROPID (parcel ID), ACREAGE, CITYNAME (municipality), PIN,
-   NAME1 (owner), PROPERTY_LOCATION, ZIP, SCHOOL, geometry (EPSG:3857)
+   Fields used: PROPID, ACREAGE, MUNICIPALNAME, CLASS
 
-2. CAMA assessment attributes
-   Berks County GIS — ParcelSearchTable MapServer, Layer 3 (CAMA_Master table)
-   https://gis.co.berks.pa.us/arcgis/rest/services/Assess/ParcelSearchTable/MapServer/3
-   Fields: PARID, TAX_DIST, ACCOUNT, DESCR1-4, NAME1
-   Join key: PARID == PROPID
+2. CAMA_Master assessment data
+   Berks County GIS — ParcelSearchTable MapServer, Layer 3
+   Fields used: PARID, LAND_VALUE, BLDG_VALUE, TOTAL_VALUE,
+                PRICE, SALEDT, SALEYR1-3, SALEMTH1-3, SALEPR1-3
 
-   NOTE: The full CAMA export files (Master, Residential, Commercial) are also
-   available on the Berks County Open Data Hub:
-     https://opendata.berkspa.gov
-   These flat-file exports contain the richest attribute data (land value, building
-   value, year built, bedrooms, bathrooms, stories, condition, quality, use code).
-   CAMA data dictionary:
-     https://www.berkspa.gov/getmedia/d40d71e9-35cd-4a09-9300-6cf0281a6bff/Berks-CAMA-Exports-Metadata.pdf
+3. CAMA Residential building attributes
+   Berks County ArcGIS Online FeatureServer, Layer 15
+   https://services3.arcgis.com/dGYe1jDYrTw1wwpc/arcgis/rest/services/
+       Berks_Assessment_CAMA_Residential_File/FeatureServer/15
+   Fields used: PARID, SFLA, YRBLT, PHYCOND, BEDROOMS, FULLBATHS, STORIES, STYLE
+
+Field names confirmed against Berks CAMA Exports Metadata PDF (1/6/2023).
+
+CLASS (Assessed Class) codes: R=Residential, A=Apartment, C=Commercial,
+  I=Industrial, F=Farm, E=Exempt, FC=Farm Commercial, UE=Public Utility Exempt,
+  UT=Public Utility Taxable
+
+PHYCOND (Physical Condition) codes: VG=Very Good, GD=Good, AV=Average,
+  FR=Fair, PR=Poor, US=Unsound  →  mapped to 6/5/4/3/2/1
+
+NOTE: No quality/grade field exists in CAMA Residential.
+  bldg_quality_num is therefore not produced.
 
 Usage
 -----
-Run this script first. It will:
-  1. Download parcel geometry + base attributes from the GIS server
-  2. Attempt to join CAMA_Master attributes
-  3. Print all raw column names so you can update FIELD_MAP and settings.json
+Run from notebooks/pipeline/:
+    python download_berks_parcels.py
 
-Then update FIELD_MAP below (and the right-hand side of settings.json data.load)
-to match the actual field names from the printed output, and re-run.
-
-Expected output
----------------
+Expected outputs
+----------------
   data/us-pa-berks/in/berks_parcels.parquet
-
-Required standardized columns:
-  key, land_area_sqft, bldg_area_finished_sqft, bldg_year_built,
-  bldg_condition_num, bldg_quality_num, bldg_rooms_bed, bldg_rooms_bath,
-  bldg_stories, bldg_type, category_code, zoning, neighborhood,
-  census_tract, assr_land_value, assr_impr_value, assr_market_value,
-  is_vacant, geometry (polygon, EPSG:4326)
+  data/us-pa-berks/in/sales.parquet
 """
 
 import math
@@ -62,14 +60,17 @@ os.environ["PYTHONIOENCODING"] = "utf-8"
 # Configuration
 # ---------------------------------------------------------------------------
 
-# Berks County GIS — ParcelSearchTable service
-GIS_BASE    = "https://gis.co.berks.pa.us/arcgis/rest/services/Assess/ParcelSearchTable/MapServer"
+# Berks County GIS server
+GIS_BASE     = "https://gis.co.berks.pa.us/arcgis/rest/services/Assess/ParcelSearchTable/MapServer"
 PARCEL_LAYER = 0   # Parcels (polygon, EPSG:3857)
 CAMA_LAYER   = 3   # CAMA_Master (table, no geometry)
 
-PAGE_SIZE = 1000   # server max records per request
+# Berks County ArcGIS Online — CAMA Residential
+CAMA_RES_BASE  = "https://services3.arcgis.com/dGYe1jDYrTw1wwpc/arcgis/rest/services/Berks_Assessment_CAMA_Residential_File/FeatureServer"
+CAMA_RES_LAYER = 15
 
-# The GIS server uses a User-Agent check; send a browser-like header
+PAGE_SIZE = 1000   # records per request
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -78,74 +79,70 @@ HEADERS = {
     )
 }
 
-OUT_DIR  = Path(__file__).parent / "data" / "us-pa-berks" / "in"
+OUT_DIR      = Path(__file__).parent / "data" / "us-pa-berks" / "in"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
-OUT_PATH = OUT_DIR / "berks_parcels.parquet"
+PARCELS_PATH = OUT_DIR / "berks_parcels.parquet"
+SALES_PATH   = OUT_DIR / "sales.parquet"
 
 # ---------------------------------------------------------------------------
-# FIELD MAPPING
+# Field mapping  (source column → standardized name)
 # ---------------------------------------------------------------------------
-# Keys   = standardized openavmkit field names (must match settings.json data.load)
-# Values = raw column names from the combined parcel + CAMA download
-#
-# These are best-guess names based on confirmed GIS metadata and typical Berks
-# CAMA export field names. Run once, check the printed column list, then update
-# values here and in settings.json data.load to match.
-#
-# Fields marked REQUIRED must resolve; the others are optional but used if present.
+# All source field names confirmed against CAMA Exports Metadata PDF.
+
 FIELD_MAP = {
-    # From parcel layer (Layer 0) — confirmed column names
-    "key":                     "PROPID",         # unique parcel identifier (UPI)
-    "land_area_sqft":          "ACREAGE",        # acres; converted to sqft below
-    "neighborhood":            "MUNICIPALNAME",  # municipality name (44 in Berks)
-    "category_code":           "CLASS",          # PA property class code (e.g. 101, 210)
-    # From CAMA_Master (Layer 3) — confirmed column names, added via PARID join
-    "assr_land_value":         "LAND_VALUE",     # assessed land value
-    "assr_impr_value":         "BLDG_VALUE",     # assessed improvement value
-    "assr_market_value":       "TOT_VALUE",      # total assessed/market value
-    # Building attributes — NOT in Layer 0 or CAMA_Master
-    # These require the CAMA Residential export from opendata.berkspa.gov
-    # Field names below are typical PA/Berks CAMA schema; verify against the
-    # data dictionary PDF before relying on them:
-    # https://www.berkspa.gov/getmedia/d40d71e9-35cd-4a09-9300-6cf0281a6bff/Berks-CAMA-Exports-Metadata.pdf
-    "bldg_area_finished_sqft": "SFLA",           # finished living area sq ft
-    "bldg_year_built":         "YRBLT",          # year built
-    "bldg_condition_num":      "CONDITION",      # numeric condition rating
-    "bldg_quality_num":        "GRADE",          # numeric quality/grade rating
-    "bldg_rooms_bed":          "RMBED",          # bedrooms
-    "bldg_rooms_bath":         "FIXBATH",        # full bathrooms
-    "bldg_stories":            "STORY",          # number of stories
-    "bldg_type":               "STYLE",          # building style/type description
-    # zoning: not available in GIS layers — omitted
-    # census_tract: not in source data; added automatically by openavmkit Census enrichment
+    # Parcel layer (Layer 0)
+    "key":            "PROPID",        # Unique Parcel ID (UPI)
+    "land_area_sqft": "ACREAGE",       # Acres — converted to sqft below
+    "neighborhood":   "MUNICIPALNAME", # Municipality name (44 in Berks)
+    "category_code":  "CLASS",         # Assessed class: R/A/C/I/F/E/UE/UT
+    # CAMA_Master (Layer 3)
+    "assr_land_value":   "LAND_VALUE",  # Land Total
+    "assr_impr_value":   "BLDG_VALUE",  # Building Total
+    "assr_market_value": "TOTAL_VALUE", # Assessed Total
+    # CAMA Residential (FeatureServer/15)
+    "bldg_area_finished_sqft": "SFLA",      # Total Sq Ft Living Area
+    "bldg_year_built":         "YRBLT",     # Year Built
+    "bldg_condition_num":      "PHYCOND",   # Physical Condition (mapped → numeric below)
+    "bldg_rooms_bed":          "BEDROOMS",  # Number of Bedrooms
+    "bldg_rooms_bath":         "FULLBATHS", # Number of Full Baths
+    "bldg_stories":            "STORIES",   # Story Height
+    "bldg_type":               "STYLE",     # Architectural Style code
+    # bldg_quality_num: not available — no grade/quality field in CAMA Residential
+    # census_tract: added by openavmkit Census enrichment
+    # is_vacant: derived below from SFLA and CLASS
 }
 
+# Physical condition text codes → numeric (1=Unsound … 6=Very Good)
+PHYCOND_MAP = {"US": 1, "PR": 2, "FR": 3, "AV": 4, "GD": 5, "VG": 6}
+
+# Earliest sale year to include in sales.parquet
+SALES_MIN_YEAR = 2018
+
 # ---------------------------------------------------------------------------
-# Helpers
+# HTTP helpers
 # ---------------------------------------------------------------------------
 
-def _get_record_count(base: str, layer: int, where: str = "1=1") -> int:
-    url = f"{base}/{layer}/query"
-    resp = requests.get(
-        url,
-        headers=HEADERS,
-        params={"where": where, "returnCountOnly": "true", "f": "json"},
-        timeout=60,
-    )
+def _get(url: str, params: dict) -> dict:
+    resp = requests.get(url, headers=HEADERS, params=params, timeout=120)
     resp.raise_for_status()
     data = resp.json()
     if "error" in data:
-        raise RuntimeError(f"ArcGIS error (count): {data['error']}")
+        raise RuntimeError(f"ArcGIS error: {data['error']}  url={url}")
+    return data
+
+
+def _get_record_count(base: str, layer: int, where: str = "1=1") -> int:
+    data = _get(
+        f"{base}/{layer}/query",
+        {"where": where, "returnCountOnly": "true", "f": "json"},
+    )
     return int(data.get("count", 0))
 
 
 def _query_page_geojson(base: str, layer: int, offset: int, count: int) -> list:
-    """Query a feature layer (with geometry) returning GeoJSON features."""
-    url = f"{base}/{layer}/query"
-    resp = requests.get(
-        url,
-        headers=HEADERS,
-        params={
+    data = _get(
+        f"{base}/{layer}/query",
+        {
             "where": "1=1",
             "outFields": "*",
             "returnGeometry": "true",
@@ -154,22 +151,14 @@ def _query_page_geojson(base: str, layer: int, offset: int, count: int) -> list:
             "resultOffset": offset,
             "resultRecordCount": count,
         },
-        timeout=120,
     )
-    resp.raise_for_status()
-    data = resp.json()
-    if "error" in data:
-        raise RuntimeError(f"ArcGIS error (page offset={offset}): {data['error']}")
     return data.get("features", [])
 
 
 def _query_page_table(base: str, layer: int, offset: int, count: int) -> list:
-    """Query a table layer (no geometry) returning JSON records."""
-    url = f"{base}/{layer}/query"
-    resp = requests.get(
-        url,
-        headers=HEADERS,
-        params={
+    data = _get(
+        f"{base}/{layer}/query",
+        {
             "where": "1=1",
             "outFields": "*",
             "returnGeometry": "false",
@@ -177,32 +166,24 @@ def _query_page_table(base: str, layer: int, offset: int, count: int) -> list:
             "resultOffset": offset,
             "resultRecordCount": count,
         },
-        timeout=120,
     )
-    resp.raise_for_status()
-    data = resp.json()
-    if "error" in data:
-        raise RuntimeError(f"ArcGIS error (table page offset={offset}): {data['error']}")
     return data.get("features", [])
 
 
-def _paginate(base: str, layer: int, *, has_geometry: bool) -> list:
+def _paginate(base: str, layer: int, *, has_geometry: bool, label: str = "") -> list:
     total = _get_record_count(base, layer)
-    print(f"  Total records: {total:,}")
+    print(f"  {label or f'Layer {layer}'}: {total:,} records")
     if total == 0:
-        raise RuntimeError(
-            f"No records returned from layer {layer}. "
-            f"Inspect the service at {base}/{layer}?f=json."
-        )
+        raise RuntimeError(f"No records from {base}/{layer}. Check service availability.")
     pages = math.ceil(total / PAGE_SIZE)
     features = []
-    query_fn = _query_page_geojson if has_geometry else _query_page_table
+    fn = _query_page_geojson if has_geometry else _query_page_table
     for i in range(pages):
         offset = i * PAGE_SIZE
-        print(f"  Page {i + 1}/{pages}  (offset {offset:,}) ...", end="", flush=True)
+        print(f"  Page {i+1}/{pages} (offset {offset:,}) ...", end="", flush=True)
         for attempt in range(4):
             try:
-                page = query_fn(base, layer, offset, PAGE_SIZE)
+                page = fn(base, layer, offset, PAGE_SIZE)
                 break
             except Exception as exc:
                 if attempt == 3:
@@ -211,52 +192,110 @@ def _paginate(base: str, layer: int, *, has_geometry: bool) -> list:
                 print(f" retry in {wait}s ({exc}) ...", end="", flush=True)
                 time.sleep(wait)
         features.extend(page)
-        print(f" {len(page)} records")
-        time.sleep(0.25)
+        print(f" {len(page)}")
+        time.sleep(0.2)
     return features
 
+# ---------------------------------------------------------------------------
+# Conversion helpers
+# ---------------------------------------------------------------------------
 
 def _features_to_gdf(features: list) -> gpd.GeoDataFrame:
-    """Convert GeoJSON feature list to GeoDataFrame (EPSG:4326)."""
-    rows = []
-    geoms = []
+    rows, geoms = [], []
     for f in features:
         rows.append(f.get("properties", {}))
         geoms.append(shape(f["geometry"]) if f.get("geometry") else None)
-    gdf = gpd.GeoDataFrame(rows, geometry=geoms, crs="EPSG:4326")
-    return gdf
+    return gpd.GeoDataFrame(rows, geometry=geoms, crs="EPSG:4326")
 
 
 def _features_to_df(features: list) -> pd.DataFrame:
-    """Convert table feature list (no geometry) to DataFrame."""
     return pd.DataFrame([f.get("attributes", {}) for f in features])
 
 
-def _derive_is_vacant(df: pd.DataFrame) -> pd.Series:
+def _safe_float(val) -> float | None:
+    try:
+        f = float(val)
+        return f if f == f else None  # NaN check
+    except (TypeError, ValueError):
+        return None
+
+# ---------------------------------------------------------------------------
+# Sales extraction from CAMA_Master
+# ---------------------------------------------------------------------------
+
+def _extract_sales(cama: pd.DataFrame) -> pd.DataFrame:
     """
-    Derive is_vacant from category_code and finished sq ft.
+    Build a sales table from CAMA_Master sale history fields.
 
-    PA standard codes: 700-799 = Vacant land. Also treat parcels with zero
-    finished area and non-commercial codes as effectively vacant.
-    Adjust once actual codes are confirmed in the data.
+    Each CAMA_Master record can have:
+      - Most recent sale: PRICE (NUMBER), SALEDT (DATE as ms-epoch)
+      - Historical sales: SALEYR1-3 (TEXT year), SALEMTH1-3 (TEXT month), SALEPR1-3 (NUMBER)
+
+    Returns a DataFrame with columns:
+      key_sale, key, sale_date, sale_price, valid_sale, vacant_sale
     """
-    cat = df.get("category_code", pd.Series("", index=df.index))
-    cat = cat.astype(str).str.strip().str.zfill(3)
-    sqft = pd.to_numeric(
-        df.get("bldg_area_finished_sqft", pd.Series(0, index=df.index)),
-        errors="coerce",
-    ).fillna(0)
-    return (cat.str.startswith("7") | (sqft == 0)).astype(bool)
+    records = []
 
+    for _, row in cama.iterrows():
+        parid = str(row.get("PARID") or "").strip()
+        if not parid:
+            continue
 
-def _print_columns(df: pd.DataFrame, label: str) -> None:
-    print(f"\n{'='*60}")
-    print(f"{label} — {len(df.columns)} columns, {len(df):,} rows")
-    print(f"{'='*60}")
-    for col in sorted(df.columns):
-        non_null = df[col].notna().sum() if hasattr(df[col], "notna") else "?"
-        print(f"  {col:<45}  ({non_null:,} non-null)")
+        # Most recent sale — SALEDT is stored as milliseconds since epoch
+        price0 = _safe_float(row.get("PRICE"))
+        saledt = row.get("SALEDT")
+        if price0 and price0 > 0 and saledt is not None:
+            try:
+                if isinstance(saledt, (int, float)):
+                    date0 = pd.to_datetime(saledt, unit="ms", utc=True).tz_localize(None)
+                else:
+                    date0 = pd.to_datetime(saledt)
+                if pd.notna(date0) and date0.year >= SALES_MIN_YEAR:
+                    records.append({
+                        "key_sale":   f"{parid}_{date0.year}_{date0.month:02d}_0",
+                        "key":        parid,
+                        "sale_date":  date0.normalize(),
+                        "sale_price": price0,
+                    })
+            except Exception:
+                pass
 
+        # Historical sales (SALEYR1-3 / SALEMTH1-3 / SALEPR1-3)
+        for i in range(1, 4):
+            yr  = str(row.get(f"SALEYR{i}")  or "").strip()
+            mth = str(row.get(f"SALEMTH{i}") or "").strip().zfill(2)
+            pr  = _safe_float(row.get(f"SALEPR{i}"))
+            if len(yr) == 4 and mth.isdigit() and pr and pr > 0:
+                try:
+                    yr_int = int(yr)
+                    if yr_int < SALES_MIN_YEAR:
+                        continue
+                    date_i = pd.Timestamp(f"{yr}-{mth}-01")
+                    records.append({
+                        "key_sale":   f"{parid}_{yr}_{mth}_{i}",
+                        "key":        parid,
+                        "sale_date":  date_i,
+                        "sale_price": pr,
+                    })
+                except Exception:
+                    pass
+
+    if not records:
+        print("  WARNING: No sales records extracted from CAMA_Master.")
+        return pd.DataFrame(
+            columns=["key_sale", "key", "sale_date", "sale_price", "valid_sale", "vacant_sale"]
+        )
+
+    sales = pd.DataFrame(records)
+    # Drop exact duplicate key_sale entries
+    sales = sales.drop_duplicates(subset=["key_sale"])
+    # Drop duplicate (key, sale_date, sale_price) — avoids PRICE/SALEYR1 overlap
+    sales = sales.drop_duplicates(subset=["key", "sale_date", "sale_price"])
+    # Arm's-length heuristic: price >= $10,000
+    sales["valid_sale"]  = sales["sale_price"] >= 10_000
+    # vacant_sale: filled in after join with parcel is_vacant
+    sales["vacant_sale"] = False
+    return sales.reset_index(drop=True)
 
 # ---------------------------------------------------------------------------
 # Main
@@ -264,108 +303,167 @@ def _print_columns(df: pd.DataFrame, label: str) -> None:
 
 def main():
     # -----------------------------------------------------------------------
-    # Step 1: Download parcel geometry
+    # Step 1: Download parcel polygons (Layer 0)
     # -----------------------------------------------------------------------
     print(f"\n{'='*60}")
-    print("Step 1: Download parcel polygons (Layer 0)")
-    print(f"  {GIS_BASE}/{PARCEL_LAYER}")
-    print(f"{'='*60}")
-    parcel_features = _paginate(GIS_BASE, PARCEL_LAYER, has_geometry=True)
+    print("Step 1: Parcel polygons (Layer 0)")
+    parcel_features = _paginate(GIS_BASE, PARCEL_LAYER, has_geometry=True, label="Parcels")
     parcels = _features_to_gdf(parcel_features)
-    _print_columns(parcels, "Parcel layer (raw)")
+    print(f"  Columns: {sorted(parcels.columns.tolist())}")
 
     # -----------------------------------------------------------------------
-    # Step 2: Download CAMA_Master table
-    # -----------------------------------------------------------------------
-    print(f"\n{'='*60}")
-    print("Step 2: Download CAMA_Master table (Layer 3)")
-    print(f"  {GIS_BASE}/{CAMA_LAYER}")
-    print(f"{'='*60}")
-    try:
-        cama_features = _paginate(GIS_BASE, CAMA_LAYER, has_geometry=False)
-        cama = _features_to_df(cama_features)
-        _print_columns(cama, "CAMA_Master table (raw)")
-
-        # Join CAMA onto parcels by parcel ID
-        # Parcel layer uses PROPID; CAMA table uses PARID
-        join_left  = "PROPID"
-        join_right = "PARID"
-        if join_left in parcels.columns and join_right in cama.columns:
-            print(f"\nJoining CAMA on {join_right} -> {join_left} ...")
-            # Avoid column name collisions — suffix CAMA-only columns
-            cama_cols = [c for c in cama.columns if c != join_right and c not in parcels.columns]
-            parcels = parcels.merge(
-                cama[[join_right] + cama_cols],
-                left_on=join_left, right_on=join_right,
-                how="left",
-            )
-            print(f"  After join: {len(parcels):,} rows, {len(parcels.columns)} cols")
-        else:
-            print(
-                f"\nWARNING: Join columns not found "
-                f"(looking for '{join_left}' in parcels, '{join_right}' in CAMA). "
-                f"Skipping join — update join_left/join_right if column names differ."
-            )
-    except Exception as exc:
-        print(f"\nWARNING: CAMA_Master download failed ({exc}). Continuing with parcel-only data.")
-
-    # -----------------------------------------------------------------------
-    # Step 3: Apply field mapping
+    # Step 2: Download CAMA_Master table (Layer 3)
     # -----------------------------------------------------------------------
     print(f"\n{'='*60}")
-    print("Step 3: Apply FIELD_MAP")
-    print(f"{'='*60}")
+    print("Step 2: CAMA_Master table (Layer 3)")
+    cama_features = _paginate(GIS_BASE, CAMA_LAYER, has_geometry=False, label="CAMA_Master")
+    cama = _features_to_df(cama_features)
+    print(f"  Columns: {sorted(cama.columns.tolist())}")
 
+    # -----------------------------------------------------------------------
+    # Step 3: Download CAMA Residential (FeatureServer/15)
+    # -----------------------------------------------------------------------
+    print(f"\n{'='*60}")
+    print("Step 3: CAMA Residential (FeatureServer/15)")
+    res_features = _paginate(CAMA_RES_BASE, CAMA_RES_LAYER, has_geometry=False, label="CAMA Residential")
+    cama_res = _features_to_df(res_features)
+    print(f"  Columns: {sorted(cama_res.columns.tolist())}")
+
+    # For parcels with multiple cards (TOTCARDS > 1), keep the card with the
+    # largest finished area (primary structure).
+    if "PARID" in cama_res.columns and "SFLA" in cama_res.columns:
+        cama_res["SFLA"] = pd.to_numeric(cama_res["SFLA"], errors="coerce").fillna(0)
+        cama_res = (
+            cama_res.sort_values("SFLA", ascending=False)
+                    .drop_duplicates(subset=["PARID"], keep="first")
+        )
+        print(f"  After dedup on PARID (keep max SFLA): {len(cama_res):,} rows")
+
+    # -----------------------------------------------------------------------
+    # Step 4: Extract sales from CAMA_Master
+    # -----------------------------------------------------------------------
+    print(f"\n{'='*60}")
+    print("Step 4: Extract sales from CAMA_Master")
+    sales = _extract_sales(cama)
+    print(f"  {len(sales):,} sale records (year >= {SALES_MIN_YEAR})")
+    print(f"  Valid (>= $10k): {sales['valid_sale'].sum():,}")
+
+    # -----------------------------------------------------------------------
+    # Step 5: Join CAMA_Master onto parcels
+    # -----------------------------------------------------------------------
+    print(f"\n{'='*60}")
+    print("Step 5: Join CAMA_Master -> parcels (PROPID == PARID)")
+    if "PROPID" in parcels.columns and "PARID" in cama.columns:
+        cama_cols = [c for c in cama.columns if c not in parcels.columns or c == "PARID"]
+        parcels = parcels.merge(
+            cama[list(dict.fromkeys(["PARID"] + cama_cols))],
+            left_on="PROPID", right_on="PARID",
+            how="left",
+        )
+        print(f"  After join: {len(parcels):,} rows, {len(parcels.columns)} cols")
+    else:
+        missing = []
+        if "PROPID" not in parcels.columns: missing.append("PROPID in parcels")
+        if "PARID" not in cama.columns:     missing.append("PARID in cama")
+        print(f"  WARNING: Join skipped — missing {missing}")
+
+    # -----------------------------------------------------------------------
+    # Step 6: Join CAMA Residential onto parcels
+    # -----------------------------------------------------------------------
+    print(f"\n{'='*60}")
+    print("Step 6: Join CAMA Residential -> parcels (PROPID == PARID)")
+    if "PROPID" in parcels.columns and "PARID" in cama_res.columns:
+        res_cols = [c for c in cama_res.columns
+                    if c not in parcels.columns or c == "PARID"]
+        parcels = parcels.merge(
+            cama_res[list(dict.fromkeys(["PARID"] + res_cols))],
+            left_on="PROPID", right_on="PARID",
+            how="left",
+            suffixes=("", "_res"),
+        )
+        print(f"  After join: {len(parcels):,} rows, {len(parcels.columns)} cols")
+    else:
+        missing = []
+        if "PROPID" not in parcels.columns:  missing.append("PROPID in parcels")
+        if "PARID" not in cama_res.columns:  missing.append("PARID in cama_res")
+        print(f"  WARNING: Join skipped — missing {missing}")
+
+    # -----------------------------------------------------------------------
+    # Step 7: Apply field mapping
+    # -----------------------------------------------------------------------
+    print(f"\n{'='*60}")
+    print("Step 7: Apply FIELD_MAP")
     missing = [raw for std, raw in FIELD_MAP.items() if raw not in parcels.columns]
     if missing:
         print(
-            f"WARNING: {len(missing)} mapped source column(s) not found:\n"
-            + "\n".join(f"  {c}" for c in missing)
-            + "\nUpdate FIELD_MAP above (and settings.json data.load) to match the "
-            + "column names printed above."
+            f"  WARNING: {len(missing)} source column(s) not found in combined data:\n"
+            + "\n".join(f"    {c}" for c in missing)
         )
 
     present_map = {raw: std for std, raw in FIELD_MAP.items() if raw in parcels.columns}
-    keep_raw = list(present_map.keys()) + (["geometry"] if "geometry" in parcels.columns else [])
+    keep_raw    = list(present_map.keys()) + (["geometry"] if "geometry" in parcels.columns else [])
     out = parcels[keep_raw].rename(columns=present_map)
 
-    # ACREAGE -> sqft conversion (1 acre = 43,560 sq ft)
+    # ACREAGE → sqft
     if "land_area_sqft" in out.columns:
         out["land_area_sqft"] = pd.to_numeric(out["land_area_sqft"], errors="coerce") * 43_560.0
 
-    # Cast all numeric columns
+    # Cast numeric columns
     num_cols = [
         "land_area_sqft", "bldg_area_finished_sqft", "bldg_year_built",
-        "bldg_condition_num", "bldg_quality_num", "bldg_rooms_bed",
-        "bldg_rooms_bath", "bldg_stories", "assr_land_value",
-        "assr_impr_value", "assr_market_value",
+        "bldg_condition_num", "bldg_rooms_bed", "bldg_rooms_bath",
+        "bldg_stories", "assr_land_value", "assr_impr_value", "assr_market_value",
     ]
     for col in num_cols:
         if col in out.columns:
             out[col] = pd.to_numeric(out[col], errors="coerce")
 
-    out["is_vacant"] = _derive_is_vacant(out)
+    # Map PHYCOND text → numeric condition rating
+    if "bldg_condition_num" in out.columns:
+        out["bldg_condition_num"] = (
+            out["bldg_condition_num"]
+            .astype(str)
+            .str.strip()
+            .str.upper()
+            .map(PHYCOND_MAP)
+        )
+        out["bldg_condition_num"] = pd.to_numeric(out["bldg_condition_num"], errors="coerce")
+
+    # Derive is_vacant: no finished sqft AND no building value
+    sfla = pd.to_numeric(out.get("bldg_area_finished_sqft", 0), errors="coerce").fillna(0)
+    bldg_val = pd.to_numeric(out.get("assr_impr_value", 0), errors="coerce").fillna(0)
+    out["is_vacant"] = ((sfla == 0) & (bldg_val == 0)).astype(bool)
 
     # -----------------------------------------------------------------------
-    # Step 4: Write output
+    # Step 8: Fill vacant_sale in sales using parcel is_vacant
+    # -----------------------------------------------------------------------
+    if len(sales) > 0 and "key" in out.columns:
+        vacant_lookup = out.set_index("key")["is_vacant"].to_dict()
+        sales["vacant_sale"] = sales["key"].map(vacant_lookup).fillna(False).astype(bool)
+
+    # -----------------------------------------------------------------------
+    # Step 9: Write outputs
     # -----------------------------------------------------------------------
     print(f"\n{'='*60}")
-    print("Step 4: Write output")
-    print(f"{'='*60}")
-    print(f"Output columns ({len(out.columns)}): {list(out.columns)}")
-    print(f"Writing {len(out):,} rows to:\n  {OUT_PATH}")
-    out.to_parquet(OUT_PATH, index=False)
-    print("Done.")
+    print("Step 9: Write outputs")
+
+    print(f"  berks_parcels.parquet — {len(out):,} rows, cols: {list(out.columns)}")
+    out.to_parquet(PARCELS_PATH, index=False)
+    print(f"  Written: {PARCELS_PATH}")
+
+    print(f"  sales.parquet — {len(sales):,} rows")
+    sales.to_parquet(SALES_PATH, index=False)
+    print(f"  Written: {SALES_PATH}")
+
+    print("\nDone.")
     print(
-        "\nNext steps:\n"
-        "  1. Compare the column names printed above against FIELD_MAP.\n"
-        "  2. Update FIELD_MAP values (and settings.json data.load right-hand side)\n"
-        "     to match the actual column names from the printed output.\n"
-        "  3. Download the full CAMA Residential/Commercial flat-file exports from\n"
-        "     https://opendata.berkspa.gov for richer building attributes,\n"
-        "     then merge on PARID and extend FIELD_MAP accordingly.\n"
-        "  4. Review the CAMA data dictionary PDF for exact field definitions:\n"
-        "     https://www.berkspa.gov/getmedia/d40d71e9-35cd-4a09-9300-6cf0281a6bff/Berks-CAMA-Exports-Metadata.pdf"
+        "\nNotes:\n"
+        "  - category_code values are CLASS letter codes: R/A/C/I/F/E/UE/UT\n"
+        "  - bldg_condition_num mapped from PHYCOND: 1=Unsound … 6=Very Good\n"
+        "  - bldg_quality_num not available (no grade field in CAMA Residential)\n"
+        "  - sales.parquet uses arm's-length heuristic: valid_sale = price >= $10k\n"
+        "    Review and supplement with RTT data if available.\n"
+        "  - Verify CLASS code distribution against model_groups in settings.json"
     )
 
 

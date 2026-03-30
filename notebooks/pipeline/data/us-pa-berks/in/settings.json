@@ -16,7 +16,6 @@
           "bldg_area_finished_sqft":["bldg_area_finished_sqft",  "float"],
           "bldg_year_built":        ["bldg_year_built",          "float"],
           "bldg_condition_num":     ["bldg_condition_num",       "float"],
-          "bldg_quality_num":       ["bldg_quality_num",         "float"],
           "bldg_rooms_bed":         ["bldg_rooms_bed",           "float"],
           "bldg_rooms_bath":        ["bldg_rooms_bath",          "float"],
           "bldg_stories":           ["bldg_stories",             "float"],
@@ -62,7 +61,6 @@
       },
       "fill": {
         "median_impr": [
-          "bldg_quality_num",
           "bldg_condition_num",
           "bldg_stories",
           "bldg_rooms_bath",
@@ -88,7 +86,6 @@
         "bldg_area_finished_sqft",
         "bldg_age_years",
         "bldg_condition_num",
-        "bldg_quality_num",
         "bldg_rooms_bed",
         "bldg_rooms_bath",
         "bldg_stories",
@@ -126,7 +123,6 @@
           "ind_vars": [
             "bldg_area_finished_sqft",
             "land_area_sqft",
-            "bldg_quality_num",
             "bldg_condition_num",
             "bldg_age_years",
             "bldg_rooms_bed",
@@ -162,7 +158,6 @@
           "ind_vars": [
             "bldg_area_finished_sqft",
             "land_area_sqft",
-            "bldg_quality_num",
             "bldg_condition_num",
             "bldg_age_years",
             "dist_to_cbd",
@@ -176,16 +171,16 @@
     },
     "model_groups": {
       "residential_sf": {
-        "name": "Residential single-family",
-        "filter": ["==", "category_code", "str:101"]
+        "name": "Residential (CLASS=R)",
+        "filter": ["==", "category_code", "str:R"]
       },
       "residential_mf": {
-        "name": "Residential multi-family",
-        "filter": ["isin", "category_code", ["210", "220"]]
+        "name": "Apartment (CLASS=A)",
+        "filter": ["==", "category_code", "str:A"]
       },
       "commercial": {
-        "name": "Commercial/Industrial",
-        "filter": ["isin", "category_code", ["400", "401", "402", "403", "404", "405"]]
+        "name": "Commercial/Industrial (CLASS=C or I)",
+        "filter": ["isin", "category_code", ["C", "I"]]
       },
       "vacant": {
         "name": "Vacant land",
@@ -201,7 +196,6 @@
         {"by": "bldg_area_finished_sqft", "quantiles": 10},
         {"by": "bldg_age_years",          "slice_size": 10},
         {"by": "land_area_sqft",          "quantiles": 10},
-        {"by": "bldg_quality_num",        "quantiles": 5},
         {"by": "bldg_condition_num",      "quantiles": 5},
         {"by": "<loc_neighborhood>"},
         {"by": "<loc_market_area>"}
@@ -230,7 +224,6 @@
         "bldg_area_finished_sqft",
         "bldg_age_years",
         "bldg_condition_num",
-        "bldg_quality_num",
         "bldg_rooms_bed",
         "bldg_rooms_bath",
         "bldg_stories"
