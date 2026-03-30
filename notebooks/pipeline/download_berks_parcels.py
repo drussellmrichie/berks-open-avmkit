@@ -94,26 +94,30 @@ OUT_PATH = OUT_DIR / "berks_parcels.parquet"
 #
 # Fields marked REQUIRED must resolve; the others are optional but used if present.
 FIELD_MAP = {
-    # REQUIRED — from parcel layer
-    "key":                     "PROPID",            # unique parcel identifier (UPI)
-    # From parcel layer (confirmed fields)
-    "land_area_sqft":          "ACREAGE",            # NOTE: in acres — converted below
-    "neighborhood":            "CITYNAME",           # municipality (44 in Berks)
-    # From CAMA Master or Residential export (typical field names — verify against PDF)
-    "category_code":           "CLASSCODE",          # PA standard property class code
-    "assr_land_value":         "LNDVAL",             # assessed land value
-    "assr_impr_value":         "IMPVAL",             # assessed improvement value
-    "assr_market_value":       "APRTOT",             # total appraised/market value
-    "bldg_area_finished_sqft": "SFLA",               # finished living area sq ft
-    "bldg_year_built":         "YRBLT",              # year built
-    "bldg_condition_num":      "CONDITION",          # numeric condition rating
-    "bldg_quality_num":        "GRADE",              # numeric quality/grade rating
-    "bldg_rooms_bed":          "RMBED",              # bedrooms
-    "bldg_rooms_bath":         "FIXBATH",            # full bathrooms
-    "bldg_stories":            "STORY",              # number of stories
-    "bldg_type":               "STYLE",              # building style/type description
-    "zoning":                  "ZONING",             # zoning code (if available)
-    "census_tract":            "CENSUS_TRACT",       # census tract (if available)
+    # From parcel layer (Layer 0) — confirmed column names
+    "key":                     "PROPID",         # unique parcel identifier (UPI)
+    "land_area_sqft":          "ACREAGE",        # acres; converted to sqft below
+    "neighborhood":            "MUNICIPALNAME",  # municipality name (44 in Berks)
+    "category_code":           "CLASS",          # PA property class code (e.g. 101, 210)
+    # From CAMA_Master (Layer 3) — confirmed column names, added via PARID join
+    "assr_land_value":         "LAND_VALUE",     # assessed land value
+    "assr_impr_value":         "BLDG_VALUE",     # assessed improvement value
+    "assr_market_value":       "TOT_VALUE",      # total assessed/market value
+    # Building attributes — NOT in Layer 0 or CAMA_Master
+    # These require the CAMA Residential export from opendata.berkspa.gov
+    # Field names below are typical PA/Berks CAMA schema; verify against the
+    # data dictionary PDF before relying on them:
+    # https://www.berkspa.gov/getmedia/d40d71e9-35cd-4a09-9300-6cf0281a6bff/Berks-CAMA-Exports-Metadata.pdf
+    "bldg_area_finished_sqft": "SFLA",           # finished living area sq ft
+    "bldg_year_built":         "YRBLT",          # year built
+    "bldg_condition_num":      "CONDITION",      # numeric condition rating
+    "bldg_quality_num":        "GRADE",          # numeric quality/grade rating
+    "bldg_rooms_bed":          "RMBED",          # bedrooms
+    "bldg_rooms_bath":         "FIXBATH",        # full bathrooms
+    "bldg_stories":            "STORY",          # number of stories
+    "bldg_type":               "STYLE",          # building style/type description
+    # zoning: not available in GIS layers — omitted
+    # census_tract: not in source data; added automatically by openavmkit Census enrichment
 }
 
 # ---------------------------------------------------------------------------
