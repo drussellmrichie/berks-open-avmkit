@@ -42,7 +42,7 @@ os.environ["PYTHONIOENCODING"] = "utf-8"
 
 # PASDA ArcGIS MapServer for PA Parcels.
 # Layer 0 is parcel polygons with assessment attributes.
-PASDA_BASE = "https://apps.pasda.psu.edu/arcgis/rest/services/PA_Parcels/MapServer"
+PASDА_BASE = "https://apps.pasda.psu.edu/arcgis/rest/services/PA_Parcels/MapServer"
 LAYER = 0
 
 # County filter — PASDA PA_Parcels commonly uses COUNTY_NAME.
@@ -78,8 +78,8 @@ FIELD_MAP = {
     # Building characteristics
     "bldg_area_finished_sqft": "SQFT_FINISHED",     # finished living area
     "bldg_year_built":         "YEAR_BUILT",
-    "bldg_condition_num":      "CONDITION",         # numeric 1–8 (or similar)
-    "bldg_quality_num":        "QUALITY",           # numeric 1–7 (or similar)
+    "bldg_condition_num":      "CONDITION",         # numeric 1-8 (or similar)
+    "bldg_quality_num":        "QUALITY",           # numeric 1-7 (or similar)
     "bldg_rooms_bed":          "BEDROOMS",
     "bldg_rooms_bath":         "BATHROOMS",
     "bldg_stories":            "STORIES",
