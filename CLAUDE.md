@@ -188,6 +188,8 @@ The same patches applied to `philly_open_avmkit` are required here. See `philly_
 | `data.py` | `_basic_geo_enrichment` | `land_area_sqft` cast to int64 then float GIS values assigned into it — newer pandas raises; fix: round+astype(int) the RHS |
 | `utilities/cache.py` | `write_cached_df` | `ArrowExtensionArray` has no `.sum()` — wrap in `pd.Series()` |
 | `utilities/data.py` | `div_series_z_safe` | `to_numpy(dtype=np.float64)` fails on Arrow-backed nullable columns — add `na_value=np.nan` |
+| `utilities/stats.py` | `calc_correlations` | `df_score` unbound if loop breaks on first pass (all-NA scores in small model groups) — initialize to `None` and early-return empty DataFrame |
+| `ratio_study.py` | `_run_ratio_study_breakdowns` | `np.quantile` returns NaN for all-NaN columns; NaN passes `not in bins` check and breaks `pd.cut` — skip NaN quantile values and guard for `len(bins) < 2` |
 
 ### Data Acquisition Status
 
