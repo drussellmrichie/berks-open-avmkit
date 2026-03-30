@@ -11,6 +11,32 @@ This project builds automated valuation models (AVMs) for Berks County propertie
 
 County seat: Reading, PA. FIPS: 42011.
 
+## Key Findings (Initial Run, Valuation Date 2026-01-01)
+
+### Model Performance
+
+| Model Group | Test Sales | Median Ratio | MAPE (trimmed) |
+|---|---|---|---|
+| Residential (SF) | 3,588 | 1.00 | 11.6% |
+| Commercial/Industrial | 18 | 1.04 | 23.1% |
+| Vacant Land | 30 | 0.70 | 23.8% |
+
+*Median ratio = predicted ÷ time-adjusted sale price. Trimmed = ratios between 0.6–1.4.*
+
+The residential model is well-calibrated (median ratio ~1.0, MAPE ~12%), comparable to professional mass appraisal standards. Commercial and vacant are undertrained due to low sales volume.
+
+### Assessment Ratios (Current vs. Market)
+
+A striking finding from comparing current county assessments to modeled market values:
+
+| Property Type | Median Assessment Ratio |
+|---|---|
+| Residential (SF) | **31.5%** of market value |
+| Commercial/Industrial | **34.1%** of market value |
+| Vacant Land | **3.9%** of market value |
+
+Berks County's last general reassessment was in 1994. Properties are assessed at roughly a third of market value — and vacant/undeveloped land at barely 4 cents on the dollar — reflecting decades of appreciation that the assessment rolls have never captured. This severe underassessment of land relative to improvements is a key input to the land value tax distributional analysis.
+
 ## Setup
 
 Requires Python 3.11+ and [OpenAVMKit](https://github.com/larsiusprime/openavmkit):
@@ -18,6 +44,8 @@ Requires Python 3.11+ and [OpenAVMKit](https://github.com/larsiusprime/openavmki
 ```bash
 pip install openavmkit geopandas shapely pyarrow requests
 ```
+
+Several bugs in the installed `openavmkit` library require patching before the pipeline will run. See `CLAUDE.md` for the full list of patched files and functions.
 
 ## Pipeline
 
@@ -27,7 +55,6 @@ Located in `notebooks/pipeline/`. Run scripts in order from that directory:
 cd notebooks/pipeline
 
 python download_berks_parcels.py   # Download parcels + CAMA from Berks County GIS
-python process_berks.py            # Process sales into sales.parquet  (TODO)
 python run_01_assemble.py          # Assemble parcels + sales; enrich with census/OSM
 python run_02_clean.py             # Sales scrutiny and data cleaning
 python run_03_model.py             # Train valuation models and generate ratio studies
@@ -35,16 +62,21 @@ python run_03_model.py             # Train valuation models and generate ratio s
 
 | Script | Status |
 |---|---|
-| `download_berks_parcels.py` | Partial — downloads geometry + assessed values; building attributes pending CAMA Residential join |
-| `process_berks.py` | TODO — sales/RTT data not yet acquired |
+| `download_berks_parcels.py` | Complete — downloads parcel geometry, CAMA_Master (values), CAMA Residential (building attributes + sale history) |
+| `process_berks.py` | Stub — not needed; sales are extracted from CAMA Residential by the download script |
 | `run_01_assemble.py` | Ready |
 | `run_02_clean.py` | Ready |
 | `run_03_model.py` | Ready |
 
 ## Data
 
-Input data (`notebooks/pipeline/data/us-pa-berks/`) is not tracked in git due to size.
+Input data (`notebooks/pipeline/data/us-pa-berks/`) is not tracked in git due to size. Run `download_berks_parcels.py` to fetch it from Berks County's public ArcGIS REST APIs.
 
-**Parcel data** is downloaded from the Berks County GIS server via `download_berks_parcels.py`.
+**Sources:**
+- Parcel geometry + CLASS/ACREAGE/MUNICIPALNAME: [ParcelSearchTable MapServer, Layer 0](https://gis.co.berks.pa.us/arcgis/rest/services/Assess/ParcelSearchTable/MapServer/0)
+- Assessment values (LAND_VALUE, BLDG_VALUE, TOTAL_VALUE): [CAMA_Master, Layer 3](https://gis.co.berks.pa.us/arcgis/rest/services/Assess/ParcelSearchTable/MapServer/3)
+- Building attributes + sale history: [CAMA Residential FeatureServer/15](https://services3.arcgis.com/dGYe1jDYrTw1wwpc/arcgis/rest/services/Berks_Assessment_CAMA_Residential_File/FeatureServer/15)
 
-**Sales data** requires a separate RTT extract from the Berks County Recorder of Deeds or PA Department of Revenue — see `process_berks.py` for details.
+**Universe:** 156,469 parcels — 133,855 residential (CLASS=R), 9,174 commercial/industrial, 6,996 vacant, 256 apartment, 6,188 farm/exempt.
+
+**Sales:** 78,258 extracted from CAMA Residential history fields (2018–present); 60,058 valid (≥ $10k); 18,905 retained after sales scrutiny.
