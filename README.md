@@ -4,7 +4,10 @@ Berks County, PA property valuation models using [OpenAVMKit](https://github.com
 
 ## Overview
 
-This project builds automated valuation models (AVMs) for Berks County properties using publicly available assessment and sales data. The goal is to support a distributional analysis of the impact of replacing local wage/earned income taxes with a land value tax.
+This project builds automated valuation models (AVMs) for Berks County properties using publicly available assessment and sales data. The goals are to analyze:
+
+1. The impact of Berks County's decades-old assessments on assessment fairness.
+2. A revenue-neutral shift from property tax to land value tax, conditional on updated reassessments based on recent sales.
 
 County seat: Reading, PA. FIPS: 42011.
 
