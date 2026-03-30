@@ -187,6 +187,7 @@ The same patches applied to `philly_open_avmkit` are required here. See `philly_
 | `data.py` | `_handle_duplicated_rows` | Default `sort_by` had key `"asc"` instead of `"ascendings"` — KeyError when parcels have duplicate keys |
 | `data.py` | `_basic_geo_enrichment` | `land_area_sqft` cast to int64 then float GIS values assigned into it — newer pandas raises; fix: round+astype(int) the RHS |
 | `utilities/cache.py` | `write_cached_df` | `ArrowExtensionArray` has no `.sum()` — wrap in `pd.Series()` |
+| `utilities/data.py` | `div_series_z_safe` | `to_numpy(dtype=np.float64)` fails on Arrow-backed nullable columns — add `na_value=np.nan` |
 
 ### Data Acquisition Status
 
