@@ -178,28 +178,28 @@ Four groups, filtered by `category_code` or `is_vacant`:
 
 The same patches applied to `philly_open_avmkit` are required here. See `philly_open_avmkit/CLAUDE.md` for full details. Patched files in the openavmkit install (`site-packages/openavmkit/`):
 
-| File | Functions patched |
-|---|---|
-| `utilities/stats.py` | `calc_elastic_net_regularization`, `calc_p_values_recursive_drop`, `calc_t_values_recursive_drop`, `calc_vif_recursive_drop` |
-| `shap_analysis.py` | `make_shap_table` |
-| `modeling.py` | `_contrib_to_unit_values`, `_add_prediction_to_contribution` |
-| `pipeline.py` | `finalize_models` |
+| File | Functions/locations patched | Problem fixed |
+|---|---|---|
+| `utilities/stats.py` | `calc_elastic_net_regularization`, `calc_p_values_recursive_drop`, `calc_t_values_recursive_drop`, `calc_vif_recursive_drop` | Median-impute NaN before sklearn/statsmodels fits |
+| `shap_analysis.py` | `make_shap_table` | `if list_keys_sale` → `_has_sale_keys` to avoid numpy array truth-value error |
+| `modeling.py` | `_contrib_to_unit_values`, `_add_prediction_to_contribution` | Positional concat instead of key-based merge to prevent OOM cartesian product |
+| `pipeline.py` | `finalize_models` | Added `run_main/vacant/hedonic/ensemble` params (were hardcoded `True`) |
+| `data.py` | `_handle_duplicated_rows` | Default `sort_by` had key `"asc"` instead of `"ascendings"` — KeyError when parcels have duplicate keys |
+| `data.py` | `_basic_geo_enrichment` | `land_area_sqft` cast to int64 then float GIS values assigned into it — newer pandas raises; fix: round+astype(int) the RHS |
+| `utilities/cache.py` | `write_cached_df` | `ArrowExtensionArray` has no `.sum()` — wrap in `pd.Series()` |
 
 ### Data Acquisition Status
 
-**Parcel data** — `download_berks_parcels.py` is partially implemented:
-- Downloads 156,778 parcel polygons from `gis.co.berks.pa.us/arcgis/rest/services/Assess/ParcelSearchTable/MapServer` (Layer 0)
-- Joins CAMA_Master attributes (Layer 3) on `PROPID`/`PARID`
-- **Still needed:** join CAMA Residential data for building attributes (sqft, year built, condition, quality, bedrooms, bathrooms, stories, type)
-  - FeatureServer: `https://services3.arcgis.com/dGYe1jDYrTw1wwpc/arcgis/rest/services/Berks_Assessment_CAMA_Residential_File/FeatureServer/15`
-  - Field names are placeholders pending verification against CAMA data dictionary PDF
+**Parcel data** — `download_berks_parcels.py` is fully implemented:
+- Downloads 156,778 parcel polygons from Layer 0 (geometry + CLASS/ACREAGE/MUNICIPALNAME)
+- Joins CAMA_Master (Layer 3) for LAND_VALUE, BLDG_VALUE, TOTAL_VALUE
+- Joins CAMA Residential (FeatureServer/15) for SFLA, YRBLT, PHYCOND, BEDROOMS, FULLBATHS, STORIES, STYLE
+- Extracts sales from CAMA Residential history fields (PRICE/SALEDT + SALEYR1-3/SALEMTH1-3/SALEPR1-3) — **before** SFLA-dedup so all cards contribute sales
+- Outputs: `berks_parcels.parquet` (156,469 rows after dedup) and `sales.parquet` (78,258 records, 60,058 valid ≥$10k)
 
-**Sales/RTT data** — `process_berks.py` not yet implemented:
-- No confirmed public bulk API
-- Berks County Recorder of Deeds: `https://www.berkspa.gov/departments/recorder-of-deeds`
-- PA Dept of Revenue RETR data (Realty Transfer Certificate of Return)
+**CLASS codes confirmed** from live data: R=Residential (133,855), Commercial/Industrial (9,174), Vacant (6,996 by `is_vacant` flag), Apartment/CLASS=A (256). 6,188 UNKNOWN parcels (likely F=Farm, E=Exempt).
 
-**Outstanding:** Verify `CLASS` code values against actual data and update `model_groups` in `settings.json` if PA standard codes differ from assumed values (101=SF, 210/220=MF, 400-405=Commercial).
+**Sales/RTT data** — sales are extracted from CAMA Residential history fields. `process_berks.py` remains unimplemented (was intended for external RTT data, not currently needed).
 
 ### Required Input Data Schemas
 

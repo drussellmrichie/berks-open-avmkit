@@ -22,7 +22,6 @@
           "bldg_type":              ["bldg_type",                "str"],
           "category_code":          ["category_code",            "str"],
           "neighborhood":           ["neighborhood",             "str"],
-          "census_tract":           ["census_tract",             "str"],
           "assr_land_value":        ["assr_land_value",          "float"],
           "assr_impr_value":        ["assr_impr_value",          "float"],
           "assr_market_value":      ["assr_market_value",        "float"],
