@@ -11,19 +11,21 @@ This project builds automated valuation models (AVMs) for Berks County propertie
 
 County seat: Reading, PA. FIPS: 42011.
 
-## Key Findings (Initial Run, Valuation Date 2026-01-01)
+## Key Findings (Valuation Date 2026-01-01)
 
 ### Model Performance
 
 | Model Group | Test Sales | Median Ratio | MAPE (trimmed) |
 |---|---|---|---|
-| Residential (SF) | 3,588 | 1.00 | 11.6% |
-| Commercial/Industrial | 18 | 1.04 | 23.1% |
+| Residential (SF) | 3,588 | 0.99 | 12% |
+| Commercial/Industrial | 18 | 4.77 | 8.8% |
 | Vacant Land | 30 | 0.70 | 23.8% |
 
 *Median ratio = predicted ÷ time-adjusted sale price. Trimmed = ratios between 0.6–1.4.*
 
-The residential model is well-calibrated (median ratio ~1.0, MAPE ~12%), comparable to professional mass appraisal standards. Commercial and vacant are undertrained due to low sales volume.
+The residential model is well-calibrated (median ratio ~1.0, MAPE ~12%), comparable to professional mass appraisal standards. Commercial and vacant are undertrained due to low sales volume — only 18 and 30 test sales respectively.
+
+Model inputs for residential SF: building area, land area, condition, age, bedrooms, bathrooms (full + half), stories, garage cars, fireplaces, exterior wall type, basement type, distance to Reading City Hall, lat/lon, polar coordinates, parcel aspect ratio, and municipality.
 
 ### Assessment Ratios (Current vs. Market)
 
@@ -63,7 +65,7 @@ python run_03_model.py             # Train valuation models and generate ratio s
 | Script | Status |
 |---|---|
 | `download_berks_parcels.py` | Complete — downloads parcel geometry, CAMA_Master (values), CAMA Residential (building attributes + sale history) |
-| `process_berks.py` | Stub — not needed; sales are extracted from CAMA Residential by the download script |
+| `process_berks.py` | Data validation — checks schema, key uniqueness, null rates, CLASS distribution, sales volume |
 | `run_01_assemble.py` | Ready |
 | `run_02_clean.py` | Ready |
 | `run_03_model.py` | Ready |
