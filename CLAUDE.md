@@ -265,6 +265,10 @@ CAMA Commercial FeatureServer: `https://services3.arcgis.com/dGYe1jDYrTw1wwpc/ar
 - `matplotlib` must use `"Agg"` backend (set in `run_03_model.py`) to prevent GUI hangs in subprocess execution
 - `PYTHONIOENCODING=utf-8` and `PYTHONUNBUFFERED=1` set in all pipeline scripts
 
+## Published Results (tracked)
+
+`results/ratio_study/{group}/ratio_study.{html,md}` — manually copied from `out/models/*/reports/` after a meaningful pipeline run. Update these when the model improves significantly.
+
 ## Data Files (gitignored)
 
 ```
