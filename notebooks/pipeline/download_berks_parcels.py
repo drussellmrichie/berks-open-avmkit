@@ -1,7 +1,7 @@
 """
 Download Berks County parcel data and write:
   - berks_parcels.parquet  (universe of all parcels)
-  - sales.parquet          (sales extracted from CAMA_Master history)
+  - sales.parquet          (sales extracted from CAMA Residential, Commercial, and Master)
 
 Data sources (all downloaded programmatically via ArcGIS REST API)
 ------------------------------------------------------------------
@@ -12,7 +12,8 @@ Data sources (all downloaded programmatically via ArcGIS REST API)
 
 2. CAMA_Master assessment data
    Berks County GIS — ParcelSearchTable MapServer, Layer 3
-   Fields used: PARID, LAND_VALUE, BLDG_VALUE, TOTAL_VALUE
+   Fields used: PARID, LAND_VALUE, BLDG_VALUE, TOTAL_VALUE, PRICE, SALEDT
+   (Most-recent-sale only; used as fallback for parcels not in Residential or Commercial)
 
 3. CAMA Residential building attributes + sale history
    Berks County ArcGIS Online FeatureServer, Layer 15
@@ -22,6 +23,14 @@ Data sources (all downloaded programmatically via ArcGIS REST API)
                 STORIES, STYLE, EXTWALL, BSMT, BASE_GARAGE,
                 WBFP_OPENINGS, MET_FIREPL,
                 PRICE, SALEDT, SALEYR1-3, SALEMTH1-3, SALEPR1-3
+
+4. CAMA Commercial building attributes + sale history
+   Berks County ArcGIS Online FeatureServer, Table 13
+   https://services3.arcgis.com/dGYe1jDYrTw1wwpc/arcgis/rest/services/
+       Berks_Assessment_CAMA_Commercial_File/FeatureServer/13
+   Fields used: PARID, PRICE, SALEDT, SALEYR1-3, SALEMTH1-3, SALEPR1-3
+   (Covers commercial, industrial, apartment, and farm parcels; primary source of
+   non-residential sale history including vacant commercial/industrial land)
 
 Field names confirmed against Berks CAMA Exports Metadata PDF (1/6/2023).
 
@@ -70,6 +79,10 @@ CAMA_LAYER   = 3   # CAMA_Master (table, no geometry)
 # Berks County ArcGIS Online — CAMA Residential
 CAMA_RES_BASE  = "https://services3.arcgis.com/dGYe1jDYrTw1wwpc/arcgis/rest/services/Berks_Assessment_CAMA_Residential_File/FeatureServer"
 CAMA_RES_LAYER = 15
+
+# Berks County ArcGIS Online — CAMA Commercial
+CAMA_COM_BASE  = "https://services3.arcgis.com/dGYe1jDYrTw1wwpc/arcgis/rest/services/Berks_Assessment_CAMA_Commercial_File/FeatureServer"
+CAMA_COM_LAYER = 13
 
 PAGE_SIZE = 1000   # records per request
 
@@ -338,15 +351,58 @@ def main():
     print(f"  Columns: {sorted(cama_res.columns.tolist())}")
 
     # -----------------------------------------------------------------------
-    # Step 4: Extract sales from CAMA Residential (before dedup)
+    # Step 3b: Download CAMA Commercial (FeatureServer/13)
     # -----------------------------------------------------------------------
-    # Sale history fields (PRICE/SALEDT/SALEYR1-3/etc.) live in CAMA Residential,
-    # not CAMA_Master. Extract from all cards BEFORE deduplicating so that sale
-    # history on secondary cards (lower SFLA) is not lost.
     print(f"\n{'='*60}")
-    print("Step 4: Extract sales from CAMA Residential (before dedup)")
-    sales = _extract_sales(cama_res)
-    print(f"  {len(sales):,} sale records (year >= {SALES_MIN_YEAR})")
+    print("Step 3b: CAMA Commercial (FeatureServer/13)")
+    com_features = _paginate(CAMA_COM_BASE, CAMA_COM_LAYER, has_geometry=False, label="CAMA Commercial")
+    cama_com = _features_to_df(com_features)
+    print(f"  Columns: {sorted(cama_com.columns.tolist())}")
+
+    # -----------------------------------------------------------------------
+    # Step 4: Extract sales from all three CAMA sources and combine
+    # -----------------------------------------------------------------------
+    # Sources:
+    #   - CAMA Residential: full history (PRICE/SALEDT + SALEYR1-3) for residential parcels
+    #   - CAMA Commercial:  full history for commercial/industrial/apartment/farm parcels
+    #   - CAMA Master:      most-recent sale only (PRICE/SALEDT) — catch-all for parcels
+    #                       with no Residential or Commercial card (e.g. raw vacant lots)
+    # Extract from all cards BEFORE deduplicating so that sale history on secondary
+    # cards (lower SFLA) is not lost.
+    print(f"\n{'='*60}")
+    print("Step 4: Extract sales from CAMA Residential + Commercial + Master")
+    sales_res = _extract_sales(cama_res)
+    print(f"  Residential: {len(sales_res):,} records")
+    sales_com = _extract_sales(cama_com)
+    print(f"  Commercial:  {len(sales_com):,} records")
+    sales_master = _extract_sales(cama)
+    print(f"  Master:      {len(sales_master):,} records (most-recent only, catch-all)")
+
+    # Combine and dedup
+    sales = pd.concat([sales_res, sales_com, sales_master], ignore_index=True)
+    sales = sales.drop_duplicates(subset=["key_sale"])
+    sales = sales.drop_duplicates(subset=["key", "sale_date", "sale_price"])
+    sales = sales[sales["sale_date"].notna()].reset_index(drop=True)
+
+    # Re-apply arm's-length heuristic and reset vacant_sale after merge
+    sales["valid_sale"]  = sales["sale_price"] >= 10_000
+    sales["vacant_sale"] = False
+
+    # Flag portfolio/bulk sales as non-arm's-length:
+    # If the same price appears on the same date for 5+ different parcels,
+    # it's almost certainly a portfolio transaction (e.g. a developer buying
+    # multiple lots at once), not an individual arm's-length sale.
+    # Note: historical sale dates (SALEYR/SALEMTH) are synthesized as month-start,
+    # so we use 5+ (not 3+) to avoid flagging coincidental same-month same-price sales.
+    portfolio_mask = sales.groupby(["sale_date", "sale_price"])["key"].transform("count") >= 5
+    n_portfolio = portfolio_mask.sum()
+    if n_portfolio:
+        print(f"  Flagging {n_portfolio:,} portfolio/bulk sale records as invalid")
+        sales.loc[portfolio_mask, "valid_sale"] = False
+
+    print(f"  Combined (after dedup, year >= {SALES_MIN_YEAR}): {len(sales):,} records")
+
+    print(f"  Valid (>= $10k): {sales['valid_sale'].sum():,}")
 
     # For parcels with multiple cards (TOTCARDS > 1), keep the card with the
     # largest finished area (primary structure).
@@ -356,8 +412,7 @@ def main():
             cama_res.sort_values("SFLA", ascending=False)
                     .drop_duplicates(subset=["PARID"], keep="first")
         )
-        print(f"  After dedup on PARID (keep max SFLA): {len(cama_res):,} rows")
-    print(f"  Valid (>= $10k): {sales['valid_sale'].sum():,}")
+        print(f"  CAMA Residential after dedup on PARID (keep max SFLA): {len(cama_res):,} rows")
 
     # -----------------------------------------------------------------------
     # Step 5: Join CAMA_Master onto parcels
@@ -478,8 +533,8 @@ def main():
         "  - category_code values are CLASS letter codes: R/A/C/I/F/E/UE/UT\n"
         "  - bldg_condition_num mapped from PHYCOND: 1=Unsound … 6=Very Good\n"
         "  - bldg_quality_num not available (no grade field in CAMA Residential)\n"
-        "  - sales.parquet uses arm's-length heuristic: valid_sale = price >= $10k\n"
-        "    Review and supplement with RTT data if available.\n"
+        "  - sales.parquet combines Residential + Commercial + Master sale history\n"
+        "    Arm's-length heuristic: valid_sale = price >= $10k\n"
         "  - Verify CLASS code distribution against model_groups in settings.json"
     )
 

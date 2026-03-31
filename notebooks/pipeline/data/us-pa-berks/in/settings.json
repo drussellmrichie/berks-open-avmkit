@@ -171,7 +171,11 @@
             "geom_rectangularity_num",
             "dist_to_cbd",
             "neighborhood",
-            "school_district"
+            "school_district",
+            "cat_is_residential",
+            "cat_is_commercial",
+            "cat_is_industrial",
+            "cat_is_farm"
           ]
         }
       },

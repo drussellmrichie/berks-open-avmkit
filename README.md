@@ -2,6 +2,8 @@
 
 Berks County, PA property valuation models using [OpenAVMKit](https://github.com/larsiusprime/openavmkit).
 
+> **Disclaimer:** This is independent research in progress. All models, findings, and estimates are provided for research and educational purposes only. No warranty is made regarding accuracy, completeness, or fitness for any particular purpose. This work does not constitute professional appraisal, legal, tax, or financial advice. Results should not be relied upon for any official, legal, or financial decision. Use at your own risk.
+
 ## Overview
 
 This project builds automated valuation models (AVMs) for Berks County properties using publicly available assessment and sales data. The goals are to analyze:

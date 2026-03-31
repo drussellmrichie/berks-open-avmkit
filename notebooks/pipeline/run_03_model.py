@@ -162,6 +162,22 @@ print(f"  dist_to_cbd: min={sup.universe['dist_to_cbd'].min():.3f} mi, "
 # additional join is needed here. They flow through settings.json load/fill
 # and are included in ind_vars for the main model.
 
+# Add binary category_code indicator columns for the vacant model.
+# Raw category_code is a string and gets dropped by variable-selection steps
+# that require numeric input. Binary float columns are always numeric and
+# give LightGBM a clear signal to separate residential lots from commercial/
+# industrial/farm vacant land (very different price ranges).
+print("  Adding category_code binary indicators ...")
+for col, codes in [
+    ("cat_is_residential", ["R"]),
+    ("cat_is_commercial",  ["C"]),
+    ("cat_is_industrial",  ["I"]),
+    ("cat_is_farm",        ["F"]),
+]:
+    sup.universe[col] = sup.universe["category_code"].isin(codes).astype("float64")
+    n = int(sup.universe[col].sum())
+    print(f"    {col}: {n:,} parcels = 1")
+
 print("  Filling NaN building characteristics with per-model-group medians ...")
 sup.universe = fill_universe_nulls(sup.universe)
 for col in _IMPR_FILL_MEDIAN:

@@ -182,7 +182,7 @@ The same patches applied to `philly_open_avmkit` are required here. See `philly_
 
 | File | Functions/locations patched | Problem fixed |
 |---|---|---|
-| `utilities/stats.py` | `calc_elastic_net_regularization`, `calc_p_values_recursive_drop`, `calc_t_values_recursive_drop`, `calc_vif_recursive_drop` | Median-impute NaN before sklearn/statsmodels fits |
+| `utilities/stats.py` | `calc_elastic_net_regularization`, `calc_p_values_recursive_drop`, `calc_t_values_recursive_drop`, `calc_vif_recursive_drop` | `select_dtypes(include="number")` to drop string/categorical columns before linear fits; median-impute NaN before sklearn/statsmodels fits |
 | `shap_analysis.py` | `make_shap_table` | `if list_keys_sale` → `_has_sale_keys` to avoid numpy array truth-value error |
 | `modeling.py` | `_contrib_to_unit_values`, `_add_prediction_to_contribution` | Positional concat instead of key-based merge to prevent OOM cartesian product |
 | `pipeline.py` | `finalize_models` | Added `run_main/vacant/hedonic/ensemble` params (were hardcoded `True`) |
@@ -199,12 +199,15 @@ The same patches applied to `philly_open_avmkit` are required here. See `philly_
 - Downloads 156,778 parcel polygons from Layer 0 (geometry + CLASS/ACREAGE/MUNICIPALNAME/SCHOOL)
 - Joins CAMA_Master (Layer 3) for LAND_VALUE, BLDG_VALUE, TOTAL_VALUE
 - Joins CAMA Residential (FeatureServer/15) for SFLA, YRBLT, PHYCOND, BEDROOMS, FULLBATHS, HALFBATHS, STORIES, STYLE, EXTWALL, BSMT, BASE_GARAGE, WBFP_OPENINGS, MET_FIREPL
-- Extracts sales from CAMA Residential history fields (PRICE/SALEDT + SALEYR1-3/SALEMTH1-3/SALEPR1-3) — **before** SFLA-dedup so all cards contribute sales
-- Outputs: `berks_parcels.parquet` (156,778 rows) and `sales.parquet` (78,258 records, 60,058 valid ≥$10k)
+- Joins CAMA Commercial (FeatureServer/13) for sale history on commercial/industrial/apartment/farm parcels
+- Extracts sales from all three sources: Residential + Commercial + CAMA_Master (catch-all); deduped by `key_sale` then by `(key, sale_date, sale_price)`; portfolio/bulk sales (same price+date, 5+ parcels) flagged invalid
+- Outputs: `berks_parcels.parquet` (156,778 rows) and `sales.parquet` (record counts vary by run)
+
+CAMA Commercial FeatureServer: `https://services3.arcgis.com/dGYe1jDYrTw1wwpc/arcgis/rest/services/Berks_Assessment_CAMA_Commercial_File/FeatureServer/13`
 
 **CLASS codes confirmed** from live data: R=Residential (133,855), Commercial/Industrial (9,174), Vacant (6,996 by `is_vacant` flag), Apartment/CLASS=A (256). 6,188 UNKNOWN parcels (likely F=Farm, E=Exempt).
 
-**Sales/RTT data** — sales are extracted from CAMA Residential history fields. `process_berks.py` remains unimplemented (was intended for external RTT data, not currently needed).
+**Sales/RTT data** — sales are extracted from CAMA Residential + CAMA Commercial + CAMA_Master history fields. `process_berks.py` remains unimplemented (was intended for external RTT data, not currently needed).
 
 ### Required Input Data Schemas
 
