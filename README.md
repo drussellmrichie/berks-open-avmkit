@@ -17,7 +17,7 @@ County seat: Reading, PA. FIPS: 42011.
 
 | Model Group | Test Sales | Median Ratio | MAPE (trimmed) |
 |---|---|---|---|
-| Residential (SF) | 4,401 | 1.00 | 12% |
+| Residential (SF) | 4,401 | 1.00 | 11.9% |
 | Commercial/Industrial | 18 | 4.84 | — |
 | Vacant Land | 37 | 1.59 | — |
 
@@ -25,7 +25,7 @@ County seat: Reading, PA. FIPS: 42011.
 
 The residential model is well-calibrated (median ratio ~1.0, MAPE ~12%), comparable to professional mass appraisal standards. Commercial and vacant are undertrained due to low sales volume — only 18 and 37 test sales respectively, with very few falling in the trimmed window.
 
-Model inputs for residential SF: building area, land area, condition, age, bedrooms, bathrooms (full + half), stories, garage cars, fireplaces, exterior wall type, basement type, building style (architectural type), distance to Reading City Hall, lat/lon, polar coordinates, parcel aspect ratio, and municipality. Training uses sales from 2021 onward.
+Model inputs for residential SF: building area, land area, condition, age, bedrooms, bathrooms (full + half), stories, garage cars, fireplaces, exterior wall type, basement type, building style (architectural type), distance to Reading City Hall, lat/lon, polar coordinates, parcel aspect ratio, municipality, and school district. Training uses sales from 2021 onward.
 
 ### Assessment Ratios (Current vs. Market)
 
