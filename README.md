@@ -17,15 +17,18 @@ County seat: Reading, PA. FIPS: 42011.
 
 ### Model Performance
 
-| Model Group | Test Sales | Median Ratio | MAPE (trimmed) |
-|---|---|---|---|
-| Residential (SF) | 4,401 | 1.00 | 11.9% |
-| Commercial/Industrial | 18 | 4.84 | — |
-| Vacant Land | 37 | 1.59 | — |
+Vacant land is valued by three sub-models corresponding to model groups:
 
-*Median ratio = predicted ÷ time-adjusted sale price. Trimmed = ratios between 0.6–1.4. MAPE omitted where fewer than 15 trimmed sales.*
+| Model | Test Sales | Median Ratio | MAPE | Notes |
+|---|---|---|---|---|
+| Residential SF (improved) | 5,178 | 1.00 | 11.4% | Main model; excellent |
+| Residential SF (vacant lots) | 222 | 1.01 | 44.9% | R-category vacant lots; well-calibrated |
+| Commercial/Industrial (vacant) | 35 | 2.81 | — | Too heterogeneous; model collapses to mean |
+| Farm/Exempt (vacant) | 62 | 1.61 | — | F/E category vacant; limited sales volume |
 
-The residential model is well-calibrated (median ratio ~1.0, MAPE ~12%), comparable to professional mass appraisal standards. Commercial and vacant are undertrained due to low sales volume — only 18 and 37 test sales respectively, with very few falling in the trimmed window.
+*Median ratio = predicted ÷ time-adjusted sale price. MAPE omitted where model collapses or fewer than 15 trimmed sales.*
+
+The residential SF model is well-calibrated (median ratio 1.00, MAPE 11.4%), comparable to professional mass appraisal standards. The residential vacant lot model is now also well-calibrated (ratio 1.01) after correcting a sales scrutiny issue where synthetic month-start dates caused legitimate sales to be misflagged. Commercial vacant and farm/exempt vacant land remain challenging due to sparse sales and high price variance.
 
 Model inputs for residential SF: building area, land area, condition, age, bedrooms, bathrooms (full + half), stories, garage cars, fireplaces, exterior wall type, basement type, building style (architectural type), distance to Reading City Hall, lat/lon, polar coordinates, parcel aspect ratio, municipality, and school district. Training uses sales from 2021 onward.
 

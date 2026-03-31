@@ -215,6 +215,11 @@
     }
   },
   "analysis": {
+    "sales_scrutiny": {
+      "location": "neighborhood",
+      "fields_categorical": ["category_code"],
+      "heuristics_enabled": false
+    },
     "ratio_study": {
       "look_back_years": 1,
       "breakdowns": [

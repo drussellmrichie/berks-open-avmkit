@@ -75,7 +75,7 @@ berks-open-avmkit/
 4. `fill_unknown_values_sup(...)` — null-fill per `settings.json data.process.fill`
 5. `mark_horizontal_equity_clusters_per_model_group_sup(...)` — cached as `2-clean-00-horizontal-equity`
 6. `process_sales(...)` — cached as `2-clean-01-process_sales`
-7. `run_sales_scrutiny(...)` — drops cluster + heuristic outliers; cached as `2-clean-02-sales-scrutiny`
+7. `run_sales_scrutiny(...)` — cluster-based scrutiny only (heuristics disabled); cached as `2-clean-02-sales-scrutiny`
 8. `write_notebook_output_sup(sup, "2-clean")`
 
 #### Stage 3 steps (`run_03_model.py`)
@@ -162,6 +162,10 @@ Four groups, filtered by `category_code` or `is_vacant`:
 - Main + vacant: `["lightgbm"]`; hedonic: `[]` (disabled)
 - Time adjustment: quarterly (`"period": "Q"`)
 - Ensemble: `[]` (auto)
+
+#### `analysis.sales_scrutiny`
+- `heuristics_enabled: false` — The built-in `flag_dupe_date_price` heuristic flags any 2+ sales with identical date+price as suspect. Our historical sales use synthetic month-start dates (SALEYR/SALEMTH → YYYY-MM-01), so two unrelated sales in the same month at the same price collide. This was removing ~934 valid vacant sales (60% of the 1,596 R vacant sales). Our download script's portfolio filter (5+ same date+price → invalid) already handles genuine bulk sales. Disabling heuristics recovers these, restoring residential_sf/vacant from 0.695 ratio to 1.006.
+- `fields_categorical: ["category_code"]` — Ensures cluster scrutiny compares R/C/F/I lots against their own category peers, not against each other.
 
 #### `analysis.ratio_study`
 1-year lookback, breakdowns by: sale price, building area, building age (10-yr slices), land area, condition (5 quantiles), neighborhood, market area (census tract), school district.
