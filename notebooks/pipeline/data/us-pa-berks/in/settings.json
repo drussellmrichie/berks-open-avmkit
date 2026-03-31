@@ -82,7 +82,7 @@
   "modeling": {
     "metadata": {
       "valuation_date": "2026-01-01",
-      "use_sales_from": 2022,
+      "use_sales_from": 2021,
       "modeler": "MUSA",
       "modeler_nick": "musa"
     },
@@ -151,7 +151,8 @@
             "polar_radius",
             "polar_angle",
             "geom_aspect_ratio",
-            "neighborhood"
+            "neighborhood",
+            "bldg_type"
           ]
         }
       },

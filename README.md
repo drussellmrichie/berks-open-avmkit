@@ -17,15 +17,15 @@ County seat: Reading, PA. FIPS: 42011.
 
 | Model Group | Test Sales | Median Ratio | MAPE (trimmed) |
 |---|---|---|---|
-| Residential (SF) | 3,588 | 0.99 | 12% |
-| Commercial/Industrial | 18 | 4.77 | 8.8% |
-| Vacant Land | 30 | 0.70 | 23.8% |
+| Residential (SF) | 4,401 | 1.00 | 12% |
+| Commercial/Industrial | 18 | 4.84 | — |
+| Vacant Land | 37 | 1.59 | — |
 
-*Median ratio = predicted ÷ time-adjusted sale price. Trimmed = ratios between 0.6–1.4.*
+*Median ratio = predicted ÷ time-adjusted sale price. Trimmed = ratios between 0.6–1.4. MAPE omitted where fewer than 15 trimmed sales.*
 
-The residential model is well-calibrated (median ratio ~1.0, MAPE ~12%), comparable to professional mass appraisal standards. Commercial and vacant are undertrained due to low sales volume — only 18 and 30 test sales respectively.
+The residential model is well-calibrated (median ratio ~1.0, MAPE ~12%), comparable to professional mass appraisal standards. Commercial and vacant are undertrained due to low sales volume — only 18 and 37 test sales respectively, with very few falling in the trimmed window.
 
-Model inputs for residential SF: building area, land area, condition, age, bedrooms, bathrooms (full + half), stories, garage cars, fireplaces, exterior wall type, basement type, distance to Reading City Hall, lat/lon, polar coordinates, parcel aspect ratio, and municipality.
+Model inputs for residential SF: building area, land area, condition, age, bedrooms, bathrooms (full + half), stories, garage cars, fireplaces, exterior wall type, basement type, building style (architectural type), distance to Reading City Hall, lat/lon, polar coordinates, parcel aspect ratio, and municipality. Training uses sales from 2021 onward.
 
 ### Assessment Ratios (Current vs. Market)
 
@@ -33,9 +33,9 @@ A striking finding from comparing current county assessments to modeled market v
 
 | Property Type | Median Assessment Ratio |
 |---|---|
-| Residential (SF) | **31.5%** of market value |
+| Residential (SF) | **30.7%** of market value |
 | Commercial/Industrial | **34.1%** of market value |
-| Vacant Land | **3.9%** of market value |
+| Vacant Land | **3.2%** of market value |
 
 Berks County's last general reassessment was in 1994. Properties are assessed at roughly a third of market value — and vacant/undeveloped land at barely 4 cents on the dollar — reflecting decades of appreciation that the assessment rolls have never captured. This severe underassessment of land relative to improvements is a key input to the land value tax distributional analysis.
 

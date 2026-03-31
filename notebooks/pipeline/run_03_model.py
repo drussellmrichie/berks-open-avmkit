@@ -183,7 +183,7 @@ try_models(
     save_params=True,
     verbose=verbose,
     run_main=True,
-    run_vacant=False,
+    run_vacant=True,
     run_hedonic=False,
     run_ensemble=True,
     do_shaps=False,
