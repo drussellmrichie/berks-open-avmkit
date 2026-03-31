@@ -30,7 +30,8 @@
           "assr_land_value":        ["assr_land_value",          "float"],
           "assr_impr_value":        ["assr_impr_value",          "float"],
           "assr_market_value":      ["assr_market_value",        "float"],
-          "is_vacant":              ["is_vacant",                "bool"]
+          "is_vacant":              ["is_vacant",                "bool"],
+          "school_district":        ["school_district",          "str"]
         }
       },
       "sales": {
@@ -110,6 +111,7 @@
         "dist_to_cbd",
         "neighborhood",
         "census_tract",
+        "school_district",
         "bldg_type"
       ]
     },
@@ -152,6 +154,7 @@
             "polar_angle",
             "geom_aspect_ratio",
             "neighborhood",
+            "school_district",
             "bldg_type"
           ]
         }
@@ -167,7 +170,8 @@
             "polar_radius",
             "geom_rectangularity_num",
             "dist_to_cbd",
-            "neighborhood"
+            "neighborhood",
+            "school_district"
           ]
         }
       },
@@ -216,7 +220,8 @@
         {"by": "land_area_sqft",          "quantiles": 10},
         {"by": "bldg_condition_num",      "quantiles": 5},
         {"by": "<loc_neighborhood>"},
-        {"by": "<loc_market_area>"}
+        {"by": "<loc_market_area>"},
+        {"by": "school_district"}
       ]
     }
   },
@@ -230,12 +235,13 @@
       },
       "locations": [
         "neighborhood",
-        "census_tract"
+        "census_tract",
+        "school_district"
       ]
     },
     "land": {
       "numeric":     ["land_area_sqft"],
-      "categorical": ["neighborhood", "census_tract"]
+      "categorical": ["neighborhood", "census_tract", "school_district"]
     },
     "impr": {
       "numeric": [

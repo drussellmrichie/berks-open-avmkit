@@ -97,6 +97,7 @@ FIELD_MAP = {
     "land_area_sqft": "ACREAGE",       # Acres — converted to sqft below
     "neighborhood":   "MUNICIPALNAME", # Municipality name (44 in Berks)
     "category_code":  "CLASS",         # Assessed class: R/A/C/I/F/E/UE/UT
+    "school_district": "SCHOOL",       # School district code (01–20)
     # CAMA_Master (Layer 3)
     "assr_land_value":   "LAND_VALUE",  # Land Total
     "assr_impr_value":   "BLDG_VALUE",  # Building Total
