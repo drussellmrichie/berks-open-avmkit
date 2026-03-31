@@ -47,7 +47,14 @@ NOTE: No quality/grade field exists in CAMA Residential.
 Usage
 -----
 Run from notebooks/pipeline/:
-    python download_berks_parcels.py
+    python download_berks_parcels.py                  # use cached raw data if present
+    python download_berks_parcels.py --refresh all    # re-download everything
+    python download_berks_parcels.py --refresh cama_commercial   # refresh one source
+
+--refresh accepts one or more of: parcels, cama_master, cama_residential, cama_commercial, all
+
+Raw downloads are cached to data/us-pa-berks/in/raw/ and reused on subsequent runs.
+Delete a cache file (or pass --refresh) to force a fresh download of that source.
 
 Expected outputs
 ----------------
@@ -55,6 +62,7 @@ Expected outputs
   data/us-pa-berks/in/sales.parquet
 """
 
+import argparse
 import math
 import os
 import time
@@ -96,8 +104,16 @@ HEADERS = {
 
 OUT_DIR      = Path(__file__).parent / "data" / "us-pa-berks" / "in"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
+RAW_DIR      = OUT_DIR / "raw"
+RAW_DIR.mkdir(parents=True, exist_ok=True)
 PARCELS_PATH = OUT_DIR / "berks_parcels.parquet"
 SALES_PATH   = OUT_DIR / "sales.parquet"
+
+# Raw download cache paths — reused across runs to avoid redundant API calls
+RAW_PARCELS_PATH  = RAW_DIR / "raw_parcels.parquet"
+RAW_CAMA_MASTER_PATH = RAW_DIR / "raw_cama_master.parquet"
+RAW_CAMA_RES_PATH = RAW_DIR / "raw_cama_residential.parquet"
+RAW_CAMA_COM_PATH = RAW_DIR / "raw_cama_commercial.parquet"
 
 # ---------------------------------------------------------------------------
 # Field mapping  (source column → standardized name)
@@ -323,13 +339,41 @@ def _extract_sales(cama: pd.DataFrame) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 def main():
+    parser = argparse.ArgumentParser(description="Download Berks County parcel and sales data.")
+    parser.add_argument(
+        "--refresh",
+        nargs="*",
+        metavar="SOURCE",
+        choices=["parcels", "cama_master", "cama_residential", "cama_commercial", "all"],
+        default=[],
+        help="Re-download specific sources even if cached. Choices: parcels, cama_master, "
+             "cama_residential, cama_commercial, all. Omit to use cached data where available.",
+    )
+    args = parser.parse_args()
+    refresh = set(args.refresh or [])
+    if "all" in refresh:
+        refresh = {"parcels", "cama_master", "cama_residential", "cama_commercial"}
+
+    def _needs_refresh(key, path):
+        if key in refresh:
+            return True
+        if not path.exists():
+            return True
+        return False
+
     # -----------------------------------------------------------------------
     # Step 1: Download parcel polygons (Layer 0)
     # -----------------------------------------------------------------------
     print(f"\n{'='*60}")
     print("Step 1: Parcel polygons (Layer 0)")
-    parcel_features = _paginate(GIS_BASE, PARCEL_LAYER, has_geometry=True, label="Parcels")
-    parcels = _features_to_gdf(parcel_features)
+    if _needs_refresh("parcels", RAW_PARCELS_PATH):
+        parcel_features = _paginate(GIS_BASE, PARCEL_LAYER, has_geometry=True, label="Parcels")
+        parcels = _features_to_gdf(parcel_features)
+        parcels.to_parquet(RAW_PARCELS_PATH, index=False)
+        print(f"  Downloaded {len(parcels):,} rows → cached to {RAW_PARCELS_PATH.name}")
+    else:
+        parcels = gpd.read_parquet(RAW_PARCELS_PATH)
+        print(f"  Loaded {len(parcels):,} rows from cache ({RAW_PARCELS_PATH.name})")
     print(f"  Columns: {sorted(parcels.columns.tolist())}")
 
     # -----------------------------------------------------------------------
@@ -337,8 +381,14 @@ def main():
     # -----------------------------------------------------------------------
     print(f"\n{'='*60}")
     print("Step 2: CAMA_Master table (Layer 3)")
-    cama_features = _paginate(GIS_BASE, CAMA_LAYER, has_geometry=False, label="CAMA_Master")
-    cama = _features_to_df(cama_features)
+    if _needs_refresh("cama_master", RAW_CAMA_MASTER_PATH):
+        cama_features = _paginate(GIS_BASE, CAMA_LAYER, has_geometry=False, label="CAMA_Master")
+        cama = _features_to_df(cama_features)
+        cama.to_parquet(RAW_CAMA_MASTER_PATH, index=False)
+        print(f"  Downloaded {len(cama):,} rows → cached to {RAW_CAMA_MASTER_PATH.name}")
+    else:
+        cama = pd.read_parquet(RAW_CAMA_MASTER_PATH)
+        print(f"  Loaded {len(cama):,} rows from cache ({RAW_CAMA_MASTER_PATH.name})")
     print(f"  Columns: {sorted(cama.columns.tolist())}")
 
     # -----------------------------------------------------------------------
@@ -346,8 +396,14 @@ def main():
     # -----------------------------------------------------------------------
     print(f"\n{'='*60}")
     print("Step 3: CAMA Residential (FeatureServer/15)")
-    res_features = _paginate(CAMA_RES_BASE, CAMA_RES_LAYER, has_geometry=False, label="CAMA Residential")
-    cama_res = _features_to_df(res_features)
+    if _needs_refresh("cama_residential", RAW_CAMA_RES_PATH):
+        res_features = _paginate(CAMA_RES_BASE, CAMA_RES_LAYER, has_geometry=False, label="CAMA Residential")
+        cama_res = _features_to_df(res_features)
+        cama_res.to_parquet(RAW_CAMA_RES_PATH, index=False)
+        print(f"  Downloaded {len(cama_res):,} rows → cached to {RAW_CAMA_RES_PATH.name}")
+    else:
+        cama_res = pd.read_parquet(RAW_CAMA_RES_PATH)
+        print(f"  Loaded {len(cama_res):,} rows from cache ({RAW_CAMA_RES_PATH.name})")
     print(f"  Columns: {sorted(cama_res.columns.tolist())}")
 
     # -----------------------------------------------------------------------
@@ -355,8 +411,14 @@ def main():
     # -----------------------------------------------------------------------
     print(f"\n{'='*60}")
     print("Step 3b: CAMA Commercial (FeatureServer/13)")
-    com_features = _paginate(CAMA_COM_BASE, CAMA_COM_LAYER, has_geometry=False, label="CAMA Commercial")
-    cama_com = _features_to_df(com_features)
+    if _needs_refresh("cama_commercial", RAW_CAMA_COM_PATH):
+        com_features = _paginate(CAMA_COM_BASE, CAMA_COM_LAYER, has_geometry=False, label="CAMA Commercial")
+        cama_com = _features_to_df(com_features)
+        cama_com.to_parquet(RAW_CAMA_COM_PATH, index=False)
+        print(f"  Downloaded {len(cama_com):,} rows → cached to {RAW_CAMA_COM_PATH.name}")
+    else:
+        cama_com = pd.read_parquet(RAW_CAMA_COM_PATH)
+        print(f"  Loaded {len(cama_com):,} rows from cache ({RAW_CAMA_COM_PATH.name})")
     print(f"  Columns: {sorted(cama_com.columns.tolist())}")
 
     # -----------------------------------------------------------------------
@@ -541,3 +603,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
