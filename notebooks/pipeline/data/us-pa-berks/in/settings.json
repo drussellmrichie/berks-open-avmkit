@@ -123,7 +123,7 @@
         "run": ["lightgbm"]
       },
       "hedonic": {
-        "run": []
+        "run": ["lightgbm"]
       },
       "time_adjustment": {
         "period": "Q"
@@ -184,13 +184,26 @@
           "ind_vars": [
             "bldg_area_finished_sqft",
             "land_area_sqft",
+            "land_area_sqft_log",
             "bldg_condition_num",
             "bldg_age_years",
+            "bldg_rooms_bed",
+            "bldg_rooms_bath",
+            "bldg_rooms_bath_half",
+            "bldg_stories",
+            "bldg_garage_cars",
+            "bldg_fireplaces",
+            "bldg_ext_wall",
+            "bldg_bsmt_type",
+            "bldg_type",
             "dist_to_cbd",
             "latitude_norm",
             "longitude_norm",
             "polar_radius",
-            "polar_angle"
+            "polar_angle",
+            "geom_aspect_ratio",
+            "neighborhood",
+            "school_district"
           ]
         }
       }

@@ -87,9 +87,9 @@ berks-open-avmkit/
    - `add_dist_to_cbd()` — haversine distance to Reading City Hall
    - `fill_universe_nulls()` — median-impute building fields per model group
 6. `try_variables(...)` — variable selection
-7. `try_models(...)` — LightGBM training (main + vacant; hedonic disabled)
+7. `try_models(...)` — LightGBM training (main + vacant + hedonic)
 8. `identify_outliers(...)` — wrapped in try/except; skipped if optional column missing
-9. `finalize_models(...)` — cached as `3-model-02-finalize-models`
+9. `finalize_models(...)` — cached as `3-model-02-finalize-models`; `run_main=True, run_vacant=True, run_hedonic=True`
 10. `run_and_write_ratio_study_breakdowns(...)` — ratio study reports
 
 ### Configuration: `settings.json`
@@ -156,10 +156,10 @@ Four groups, filtered by `category_code` or `is_vacant`:
 #### `modeling.models` — independent variables
 - **main** (21 features): `bldg_area_finished_sqft`, `land_area_sqft`, `bldg_condition_num`, `bldg_age_years`, `bldg_rooms_bed`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_stories`, `bldg_garage_cars`, `bldg_fireplaces`, `bldg_ext_wall`, `bldg_bsmt_type`, `dist_to_cbd`, `latitude_norm`, `longitude_norm`, `polar_radius`, `polar_angle`, `geom_aspect_ratio`, `neighborhood`, `school_district`, `bldg_type`
 - **vacant** (10 features): `land_area_sqft`, `land_area_sqft_log`, `latitude_norm`, `longitude_norm`, `polar_angle`, `polar_radius`, `geom_rectangularity_num`, `dist_to_cbd`, `neighborhood`, `school_district`
-- **hedonic**: disabled (`"run": []` in instructions)
+- **hedonic** (22 features): `bldg_area_finished_sqft`, `land_area_sqft`, `land_area_sqft_log`, `bldg_condition_num`, `bldg_age_years`, `bldg_rooms_bed`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_stories`, `bldg_garage_cars`, `bldg_fireplaces`, `bldg_ext_wall`, `bldg_bsmt_type`, `bldg_type`, `dist_to_cbd`, `latitude_norm`, `longitude_norm`, `polar_radius`, `polar_angle`, `geom_aspect_ratio`, `neighborhood`, `school_district`
 
 #### `modeling.instructions`
-- Main + vacant: `["lightgbm"]`; hedonic: `[]` (disabled)
+- Main + vacant + hedonic: `["lightgbm"]`
 - Time adjustment: quarterly (`"period": "Q"`)
 - Ensemble: `[]` (auto)
 
@@ -179,6 +179,19 @@ Four groups, filtered by `category_code` or `is_vacant`:
 
 1. **`add_dist_to_cbd(df)`** — Haversine distance (miles) from each parcel centroid to Reading City Hall (`40.3356°N, 75.9269°W`); stored as `dist_to_cbd`. Applied after spatial-lag checkpoint restore so it always runs on fresh data.
 2. **`fill_universe_nulls(universe)`** — Median-imputes 7 `_IMPR_FILL_MEDIAN` fields (`bldg_condition_num`, `bldg_stories`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_rooms_bed`, `bldg_garage_cars`, `bldg_fireplaces`) per model group on improved parcels. Falls back to global improved median if a group has no data. Also zero-fills `bldg_area_finished_sqft`.
+
+### Hedonic Model — Status and Limitations
+
+The hedonic model is enabled (`settings.json: instructions.hedonic.run: ["lightgbm"]` and `run_hedonic=True` in both `try_models` and `finalize_models`). It produces two sub-model outputs per model group:
+
+- **`hedonic_full`**: predicts total market value (ratio ~1.03, COD ~12.6% trimmed for residential_sf improved) — matches the main model's accuracy.
+- **`hedonic_land`**: intended to predict land-only value — currently **unreliable** for improved parcels.
+
+**Why `hedonic_land` is unreliable:** openavmkit's hedonic approach (`_simulate_removed_buildings` in `utilities/settings.py`) sets all improvement fields to 0/UNKNOWN for every row, then trains LightGBM on total sale prices using only land/location features. For improved properties, the model learns to explain total sale prices (land + building) from location features alone. In neighborhoods where building quality correlates with location (everywhere), this inflates land attribution. Observed results:
+- `hedonic_land` over-predicts vacant land sale prices by ~46% (median ratio 1.46 vs. standalone vacant model's 1.006)
+- For improved residential parcels, land fraction = `hedonic_land.prediction / hedonic_full.prediction` has median ~83% — implausibly high (assessor's land fraction is ~31%; market reality is likely 40-60%)
+
+**For the LVT analysis:** the hedonic model does not yet provide usable land/improvement splits. The main model + standalone vacant model remain the production-quality predictions. Land value allocation for the LVT distributional analysis will require a different approach (e.g., residual land value, spatial hedonic regression, or adjusted assessed land fractions).
 
 ### `openavmkit` Library Patches
 
