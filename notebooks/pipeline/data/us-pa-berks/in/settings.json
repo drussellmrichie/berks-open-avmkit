@@ -18,8 +18,13 @@
           "bldg_condition_num":     ["bldg_condition_num",       "float"],
           "bldg_rooms_bed":         ["bldg_rooms_bed",           "float"],
           "bldg_rooms_bath":        ["bldg_rooms_bath",          "float"],
+          "bldg_rooms_bath_half":   ["bldg_rooms_bath_half",     "float"],
           "bldg_stories":           ["bldg_stories",             "float"],
           "bldg_type":              ["bldg_type",                "str"],
+          "bldg_ext_wall":          ["bldg_ext_wall",            "str"],
+          "bldg_bsmt_type":         ["bldg_bsmt_type",           "str"],
+          "bldg_garage_cars":       ["bldg_garage_cars",         "float"],
+          "bldg_fireplaces":        ["bldg_fireplaces",          "float"],
           "category_code":          ["category_code",            "str"],
           "neighborhood":           ["neighborhood",             "str"],
           "assr_land_value":        ["assr_land_value",          "float"],
@@ -63,7 +68,10 @@
           "bldg_condition_num",
           "bldg_stories",
           "bldg_rooms_bath",
-          "bldg_rooms_bed"
+          "bldg_rooms_bath_half",
+          "bldg_rooms_bed",
+          "bldg_garage_cars",
+          "bldg_fireplaces"
         ],
         "zero": [
           "bldg_area_finished_sqft"
@@ -87,7 +95,12 @@
         "bldg_condition_num",
         "bldg_rooms_bed",
         "bldg_rooms_bath",
+        "bldg_rooms_bath_half",
         "bldg_stories",
+        "bldg_garage_cars",
+        "bldg_fireplaces",
+        "bldg_ext_wall",
+        "bldg_bsmt_type",
         "latitude_norm",
         "longitude_norm",
         "polar_angle",
@@ -126,7 +139,12 @@
             "bldg_age_years",
             "bldg_rooms_bed",
             "bldg_rooms_bath",
+            "bldg_rooms_bath_half",
             "bldg_stories",
+            "bldg_garage_cars",
+            "bldg_fireplaces",
+            "bldg_ext_wall",
+            "bldg_bsmt_type",
             "dist_to_cbd",
             "latitude_norm",
             "longitude_norm",
@@ -225,9 +243,12 @@
         "bldg_condition_num",
         "bldg_rooms_bed",
         "bldg_rooms_bath",
-        "bldg_stories"
+        "bldg_rooms_bath_half",
+        "bldg_stories",
+        "bldg_garage_cars",
+        "bldg_fireplaces"
       ],
-      "categorical": ["bldg_type"]
+      "categorical": ["bldg_type", "bldg_ext_wall", "bldg_bsmt_type"]
     }
   },
   "data_dictionary": {}

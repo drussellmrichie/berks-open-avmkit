@@ -18,7 +18,9 @@ Data sources (all downloaded programmatically via ArcGIS REST API)
    Berks County ArcGIS Online FeatureServer, Layer 15
    https://services3.arcgis.com/dGYe1jDYrTw1wwpc/arcgis/rest/services/
        Berks_Assessment_CAMA_Residential_File/FeatureServer/15
-   Fields used: PARID, SFLA, YRBLT, PHYCOND, BEDROOMS, FULLBATHS, STORIES, STYLE,
+   Fields used: PARID, SFLA, YRBLT, PHYCOND, BEDROOMS, FULLBATHS, HALFBATHS,
+                STORIES, STYLE, EXTWALL, BSMT, BASE_GARAGE,
+                WBFP_OPENINGS, MET_FIREPL,
                 PRICE, SALEDT, SALEYR1-3, SALEMTH1-3, SALEPR1-3
 
 Field names confirmed against Berks CAMA Exports Metadata PDF (1/6/2023).
@@ -100,13 +102,18 @@ FIELD_MAP = {
     "assr_impr_value":   "BLDG_VALUE",  # Building Total
     "assr_market_value": "TOTAL_VALUE", # Assessed Total
     # CAMA Residential (FeatureServer/15)
-    "bldg_area_finished_sqft": "SFLA",      # Total Sq Ft Living Area
-    "bldg_year_built":         "YRBLT",     # Year Built
-    "bldg_condition_num":      "PHYCOND",   # Physical Condition (mapped → numeric below)
-    "bldg_rooms_bed":          "BEDROOMS",  # Number of Bedrooms
-    "bldg_rooms_bath":         "FULLBATHS", # Number of Full Baths
-    "bldg_stories":            "STORIES",   # Story Height
-    "bldg_type":               "STYLE",     # Architectural Style code
+    "bldg_area_finished_sqft": "SFLA",       # Total Sq Ft Living Area
+    "bldg_year_built":         "YRBLT",      # Year Built
+    "bldg_condition_num":      "PHYCOND",    # Physical Condition (mapped → numeric below)
+    "bldg_rooms_bed":          "BEDROOMS",   # Number of Bedrooms
+    "bldg_rooms_bath":         "FULLBATHS",  # Number of Full Baths
+    "bldg_rooms_bath_half":    "HALFBATHS",  # Number of Half Baths
+    "bldg_stories":            "STORIES",    # Story Height
+    "bldg_type":               "STYLE",      # Architectural Style code
+    "bldg_ext_wall":           "EXTWALL",    # Exterior Wall type code
+    "bldg_bsmt_type":          "BSMT",       # Basement / Lower Level code
+    "bldg_garage_cars":        "BASE_GARAGE",# Basement Garage — Number of Cars
+    # bldg_fireplaces: derived below from WBFP_OPENINGS + MET_FIREPL
     # bldg_quality_num: not available — no grade/quality field in CAMA Residential
     # census_tract: added by openavmkit Census enrichment
     # is_vacant: derived below from SFLA and CLASS
@@ -415,11 +422,17 @@ def main():
     num_cols = [
         "land_area_sqft", "bldg_area_finished_sqft", "bldg_year_built",
         "bldg_condition_num", "bldg_rooms_bed", "bldg_rooms_bath",
-        "bldg_stories", "assr_land_value", "assr_impr_value", "assr_market_value",
+        "bldg_rooms_bath_half", "bldg_stories", "bldg_garage_cars",
+        "assr_land_value", "assr_impr_value", "assr_market_value",
     ]
     for col in num_cols:
         if col in out.columns:
             out[col] = pd.to_numeric(out[col], errors="coerce")
+
+    # Derive bldg_fireplaces = wood-burning openings + prefab fireplaces
+    wbfp = pd.to_numeric(parcels.get("WBFP_OPENINGS", pd.Series(0, index=parcels.index)), errors="coerce").fillna(0)
+    met_fp = pd.to_numeric(parcels.get("MET_FIREPL", pd.Series(0, index=parcels.index)), errors="coerce").fillna(0)
+    out["bldg_fireplaces"] = (wbfp + met_fp).astype("float64")
 
     # Map PHYCOND text → numeric condition rating
     if "bldg_condition_num" in out.columns:

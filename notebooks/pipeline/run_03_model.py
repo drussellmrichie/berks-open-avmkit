@@ -27,7 +27,10 @@ _IMPR_FILL_MEDIAN = [
     "bldg_condition_num",
     "bldg_stories",
     "bldg_rooms_bath",
+    "bldg_rooms_bath_half",
     "bldg_rooms_bed",
+    "bldg_garage_cars",
+    "bldg_fireplaces",
 ]
 
 
@@ -153,11 +156,11 @@ sup.universe = add_dist_to_cbd(sup.universe)
 print(f"  dist_to_cbd: min={sup.universe['dist_to_cbd'].min():.3f} mi, "
       f"max={sup.universe['dist_to_cbd'].max():.3f} mi")
 
-# TODO: Add Berks-specific field join here once data sources are confirmed.
-# For Philadelphia, this block joined frontage, garage_spaces, fireplaces,
-# basements, and general_construction from the raw OPA parquet. Add equivalent
-# Berks fields here if the assessment data includes them, then re-add those
-# fields to ind_vars in settings.json and _IMPR_FILL_MEDIAN above.
+# Berks-specific fields (bldg_garage_cars, bldg_fireplaces, bldg_ext_wall,
+# bldg_bsmt_type, bldg_rooms_bath_half) are sourced from CAMA Residential and
+# embedded in berks_parcels.parquet by download_berks_parcels.py — no
+# additional join is needed here. They flow through settings.json load/fill
+# and are included in ind_vars for the main model.
 
 print("  Filling NaN building characteristics with per-model-group medians ...")
 sup.universe = fill_universe_nulls(sup.universe)
