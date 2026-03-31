@@ -54,11 +54,11 @@ berks-open-avmkit/
 
 | Script | Status | Purpose |
 |---|---|---|
-| `download_berks_parcels.py` | **Partial** | Downloads parcel geometry + assessed values from Berks County GIS; building attributes pending CAMA Residential join |
-| `process_berks.py` | **TODO** | Process sales/RTT data into `sales.parquet` (parcel download now handled by `download_berks_parcels.py`) |
+| `download_berks_parcels.py` | **Complete** | Downloads parcel geometry + CAMA_Master + CAMA Residential; outputs `berks_parcels.parquet` + `sales.parquet` |
+| `process_berks.py` | **TODO** | Not needed — sales are extracted from CAMA Residential in `download_berks_parcels.py` |
 | `run_01_assemble.py` | Ready | Merge parcels + sales; tag model groups; enrich with census/OSM |
 | `run_02_clean.py` | Ready | Horizontal equity clustering; sales scrutiny; null-fill |
-| `run_03_model.py` | Ready | Berks enrichment + LightGBM training + SHAP writing |
+| `run_03_model.py` | Ready | Berks enrichment + LightGBM training (main + vacant) |
 
 #### Stage 1 steps (`run_01_assemble.py`)
 1. `init_notebook(locality)` — sets `os.getcwd()` to `data/us-pa-berks` (see pathing note below)
@@ -86,9 +86,8 @@ berks-open-avmkit/
 5. **Berks-specific enrichment** (outside openavmkit):
    - `add_dist_to_cbd()` — haversine distance to Reading City Hall
    - `fill_universe_nulls()` — median-impute building fields per model group
-   - **TODO block** — join additional Berks assessment fields (garage, fireplaces, etc.)
 6. `try_variables(...)` — variable selection
-7. `try_models(...)` — LightGBM training (main + ensemble only; vacant/hedonic disabled)
+7. `try_models(...)` — LightGBM training (main + vacant; hedonic disabled)
 8. `identify_outliers(...)` — wrapped in try/except; skipped if optional column missing
 9. `finalize_models(...)` — cached as `3-model-02-finalize-models`
 10. `run_and_write_ratio_study_breakdowns(...)` — ratio study reports
@@ -102,40 +101,46 @@ Location: `notebooks/pipeline/data/us-pa-berks/in/settings.json`
 
 Confirmed source columns (from Berks County GIS server, verified against live data):
 
-| Standardized field | Source column | Origin | Status |
+| Standardized field | Source column | Origin | Notes |
 |---|---|---|---|
-| `key` | `PROPID` | Parcel layer (Layer 0) | Confirmed |
-| `land_area_sqft` | `ACREAGE` × 43,560 | Parcel layer | Confirmed |
-| `neighborhood` | `MUNICIPALNAME` | Parcel layer | Confirmed |
-| `category_code` | `CLASS` | Parcel layer | Confirmed — verify actual code values |
-| `assr_land_value` | `LAND_VALUE` | CAMA_Master (Layer 3) | Confirmed |
-| `assr_impr_value` | `BLDG_VALUE` | CAMA_Master | Confirmed |
-| `assr_market_value` | `TOT_VALUE` | CAMA_Master | Confirmed |
-| `bldg_area_finished_sqft` | `SFLA` | CAMA Residential (pending) | Placeholder |
-| `bldg_year_built` | `YRBLT` | CAMA Residential (pending) | Placeholder |
-| `bldg_condition_num` | `CONDITION` | CAMA Residential (pending) | Placeholder |
-| `bldg_quality_num` | `GRADE` | CAMA Residential (pending) | Placeholder |
-| `bldg_rooms_bed` | `RMBED` | CAMA Residential (pending) | Placeholder |
-| `bldg_rooms_bath` | `FIXBATH` | CAMA Residential (pending) | Placeholder |
-| `bldg_stories` | `STORY` | CAMA Residential (pending) | Placeholder |
-| `bldg_type` | `STYLE` | CAMA Residential (pending) | Placeholder |
-| `census_tract` | `census_tract` | Added by openavmkit Census enrichment | Auto |
-| `is_vacant` | Derived | From `CLASS` prefix "7" or zero sqft | Derived |
+| `key` | `PROPID` | Parcel layer (Layer 0) | Unique Parcel ID (UPI) |
+| `land_area_sqft` | `ACREAGE` × 43,560 | Parcel layer | Acres converted to sqft |
+| `neighborhood` | `MUNICIPALNAME` | Parcel layer | 44 municipalities |
+| `category_code` | `CLASS` | Parcel layer | R/A/C/I/F/E/UE/UT |
+| `school_district` | `SCHOOL` | Parcel layer | Codes 01–20 |
+| `assr_land_value` | `LAND_VALUE` | CAMA_Master (Layer 3) | |
+| `assr_impr_value` | `BLDG_VALUE` | CAMA_Master | |
+| `assr_market_value` | `TOTAL_VALUE` | CAMA_Master | |
+| `bldg_area_finished_sqft` | `SFLA` | CAMA Residential (FeatureServer/15) | Total Sq Ft Living Area |
+| `bldg_year_built` | `YRBLT` | CAMA Residential | Year Built |
+| `bldg_condition_num` | `PHYCOND` | CAMA Residential | Mapped: US=1 PR=2 FR=3 AV=4 GD=5 VG=6 |
+| `bldg_rooms_bed` | `BEDROOMS` | CAMA Residential | |
+| `bldg_rooms_bath` | `FULLBATHS` | CAMA Residential | |
+| `bldg_rooms_bath_half` | `HALFBATHS` | CAMA Residential | |
+| `bldg_stories` | `STORIES` | CAMA Residential | |
+| `bldg_type` | `STYLE` | CAMA Residential | Architectural style code |
+| `bldg_ext_wall` | `EXTWALL` | CAMA Residential | Exterior wall type code |
+| `bldg_bsmt_type` | `BSMT` | CAMA Residential | Basement type code |
+| `bldg_garage_cars` | `BASE_GARAGE` | CAMA Residential | Basement garage car count |
+| `bldg_fireplaces` | derived | CAMA Residential | `WBFP_OPENINGS + MET_FIREPL` |
+| `census_tract` | `census_tract` | openavmkit Census enrichment | Non-functional without Census API key |
+| `is_vacant` | derived | | Zero SFLA and zero `assr_impr_value` |
 
 **Zoning is not available in the Berks GIS data and has been removed from the model.**
+**`bldg_quality_num` does not exist — CAMA Residential has no grade/quality field.**
 
 CAMA Residential FeatureServer: `https://services3.arcgis.com/dGYe1jDYrTw1wwpc/arcgis/rest/services/Berks_Assessment_CAMA_Residential_File/FeatureServer/15`
 CAMA data dictionary PDF: in `data/us-pa-berks/in/` (downloaded from opendata.berkspa.gov)
 
 #### `data.process`
-- **Census enrichment:** FIPS `42011`
+- **Census enrichment:** FIPS `42011` — **currently non-functional** (no Census API key set); `census_tract` will be absent from output and must not appear in `ind_vars`
 - **OSM enrichment:** enabled
-- **Null-fill:** `median_impr` for 5 building fields; `zero` for `bldg_area_finished_sqft`
+- **Null-fill:** `median_impr` for 7 building fields (`bldg_condition_num`, `bldg_stories`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_rooms_bed`, `bldg_garage_cars`, `bldg_fireplaces`); `zero` for `bldg_area_finished_sqft`
 - **Dupe handling:** drop on `key` (parcels), drop on `key_sale` (sales)
 
 #### `modeling.metadata`
 - `valuation_date`: `2026-01-01`
-- `use_sales_from`: `2022` — consider changing to `2023` if Berks sales volume is thin (~10–15k/year)
+- `use_sales_from`: `2021`
 - `modeler`: `MUSA` / `musa`
 
 #### `modeling.model_groups`
@@ -143,17 +148,15 @@ Four groups, filtered by `category_code` or `is_vacant`:
 
 | Group | Filter |
 |---|---|
-| `residential_sf` | `category_code == "101"` |
-| `residential_mf` | `category_code in ["210", "220"]` |
-| `commercial` | `category_code in ["400"–"405"]` |
+| `residential_sf` | `category_code == "R"` |
+| `residential_mf` | `category_code == "A"` |
+| `commercial` | `category_code in ["C", "I"]` |
 | `vacant` | `is_vacant == true` |
 
-**Verify these codes against actual Berks data before running.**
-
 #### `modeling.models` — independent variables
-- **main** (15 features): `bldg_area_finished_sqft`, `land_area_sqft`, `bldg_quality_num`, `bldg_condition_num`, `bldg_age_years`, `bldg_rooms_bed`, `bldg_rooms_bath`, `bldg_stories`, `dist_to_cbd`, `latitude_norm`, `longitude_norm`, `polar_radius`, `polar_angle`, `geom_aspect_ratio`, `neighborhood`
-- **vacant** (9 features): `land_area_sqft`, `land_area_sqft_log`, `latitude_norm`, `longitude_norm`, `polar_angle`, `polar_radius`, `geom_rectangularity_num`, `dist_to_cbd`, `neighborhood`
-- **hedonic** (10 features): disabled (`"run": []` in instructions)
+- **main** (21 features): `bldg_area_finished_sqft`, `land_area_sqft`, `bldg_condition_num`, `bldg_age_years`, `bldg_rooms_bed`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_stories`, `bldg_garage_cars`, `bldg_fireplaces`, `bldg_ext_wall`, `bldg_bsmt_type`, `dist_to_cbd`, `latitude_norm`, `longitude_norm`, `polar_radius`, `polar_angle`, `geom_aspect_ratio`, `neighborhood`, `school_district`, `bldg_type`
+- **vacant** (10 features): `land_area_sqft`, `land_area_sqft_log`, `latitude_norm`, `longitude_norm`, `polar_angle`, `polar_radius`, `geom_rectangularity_num`, `dist_to_cbd`, `neighborhood`, `school_district`
+- **hedonic**: disabled (`"run": []` in instructions)
 
 #### `modeling.instructions`
 - Main + vacant: `["lightgbm"]`; hedonic: `[]` (disabled)
@@ -161,18 +164,17 @@ Four groups, filtered by `category_code` or `is_vacant`:
 - Ensemble: `[]` (auto)
 
 #### `analysis.ratio_study`
-1-year lookback, breakdowns by: sale price, building area, building age (10-yr slices), land area, quality (5 quantiles), condition (5 quantiles), neighborhood, market area (census tract).
+1-year lookback, breakdowns by: sale price, building area, building age (10-yr slices), land area, condition (5 quantiles), neighborhood, market area (census tract), school district.
 
 #### `field_classification`
 - `loc_neighborhood` → `neighborhood`; `loc_market_area` → `census_tract`
-- Land numeric: `land_area_sqft`; land categorical: `zoning`, `neighborhood`, `census_tract`
-- Improvement numeric: area, age, condition, quality, rooms, stories; categorical: `bldg_type`
+- Land numeric: `land_area_sqft`; land categorical: `neighborhood`, `census_tract`, `school_district`
+- Improvement numeric: area, age, condition, rooms, stories, garage, fireplaces; categorical: `bldg_type`, `bldg_ext_wall`, `bldg_bsmt_type`
 
 ### Berks-Specific Enrichment in `run_03_model.py`
 
 1. **`add_dist_to_cbd(df)`** — Haversine distance (miles) from each parcel centroid to Reading City Hall (`40.3356°N, 75.9269°W`); stored as `dist_to_cbd`. Applied after spatial-lag checkpoint restore so it always runs on fresh data.
-2. **`fill_universe_nulls(universe)`** — Median-imputes the 5 `_IMPR_FILL_MEDIAN` fields (`bldg_quality_num`, `bldg_condition_num`, `bldg_stories`, `bldg_rooms_bath`, `bldg_rooms_bed`) per model group on improved parcels. Falls back to global improved median if a group has no data. Also zero-fills `bldg_area_finished_sqft`.
-3. **TODO block** — Placeholder for joining additional Berks assessment fields (equivalent to Philadelphia's OPA join for frontage, garage spaces, fireplaces, basements, construction type). Once added, include those fields in `ind_vars` in `settings.json` and append them to `_IMPR_FILL_MEDIAN`.
+2. **`fill_universe_nulls(universe)`** — Median-imputes 7 `_IMPR_FILL_MEDIAN` fields (`bldg_condition_num`, `bldg_stories`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_rooms_bed`, `bldg_garage_cars`, `bldg_fireplaces`) per model group on improved parcels. Falls back to global improved median if a group has no data. Also zero-fills `bldg_area_finished_sqft`.
 
 ### `openavmkit` Library Patches
 
@@ -194,11 +196,11 @@ The same patches applied to `philly_open_avmkit` are required here. See `philly_
 ### Data Acquisition Status
 
 **Parcel data** — `download_berks_parcels.py` is fully implemented:
-- Downloads 156,778 parcel polygons from Layer 0 (geometry + CLASS/ACREAGE/MUNICIPALNAME)
+- Downloads 156,778 parcel polygons from Layer 0 (geometry + CLASS/ACREAGE/MUNICIPALNAME/SCHOOL)
 - Joins CAMA_Master (Layer 3) for LAND_VALUE, BLDG_VALUE, TOTAL_VALUE
-- Joins CAMA Residential (FeatureServer/15) for SFLA, YRBLT, PHYCOND, BEDROOMS, FULLBATHS, STORIES, STYLE
+- Joins CAMA Residential (FeatureServer/15) for SFLA, YRBLT, PHYCOND, BEDROOMS, FULLBATHS, HALFBATHS, STORIES, STYLE, EXTWALL, BSMT, BASE_GARAGE, WBFP_OPENINGS, MET_FIREPL
 - Extracts sales from CAMA Residential history fields (PRICE/SALEDT + SALEYR1-3/SALEMTH1-3/SALEPR1-3) — **before** SFLA-dedup so all cards contribute sales
-- Outputs: `berks_parcels.parquet` (156,469 rows after dedup) and `sales.parquet` (78,258 records, 60,058 valid ≥$10k)
+- Outputs: `berks_parcels.parquet` (156,778 rows) and `sales.parquet` (78,258 records, 60,058 valid ≥$10k)
 
 **CLASS codes confirmed** from live data: R=Residential (133,855), Commercial/Industrial (9,174), Vacant (6,996 by `is_vacant` flag), Apartment/CLASS=A (256). 6,188 UNKNOWN parcels (likely F=Farm, E=Exempt).
 
@@ -210,24 +212,27 @@ The same patches applied to `philly_open_avmkit` are required here. See `philly_
 
 | Field | Type | Notes |
 |---|---|---|
-| `key` | str | Unique parcel identifier |
-| `land_area_sqft` | float | |
-| `bldg_area_finished_sqft` | float | |
-| `bldg_year_built` | float | |
-| `bldg_condition_num` | float | Numeric rating |
-| `bldg_quality_num` | float | Numeric rating |
-| `bldg_rooms_bed` | float | |
-| `bldg_rooms_bath` | float | |
-| `bldg_stories` | float | |
-| `bldg_type` | str | |
-| `category_code` | str | PA standard codes |
-| `zoning` | str | |
-| `neighborhood` | str | Municipality, zip, or census tract proxy |
-| `census_tract` | str | |
+| `key` | str | Unique parcel identifier (PROPID/UPI) |
+| `land_area_sqft` | float | Converted from ACREAGE |
+| `neighborhood` | str | Municipality name (44 in Berks) |
+| `category_code` | str | CLASS: R/A/C/I/F/E/UE/UT |
+| `school_district` | str | Code 01–20 |
 | `assr_land_value` | float | |
 | `assr_impr_value` | float | |
 | `assr_market_value` | float | |
-| `is_vacant` | bool | |
+| `bldg_area_finished_sqft` | float | |
+| `bldg_year_built` | float | |
+| `bldg_condition_num` | float | 1=Unsound … 6=Very Good |
+| `bldg_rooms_bed` | float | |
+| `bldg_rooms_bath` | float | |
+| `bldg_rooms_bath_half` | float | |
+| `bldg_stories` | float | |
+| `bldg_type` | str | Architectural style code |
+| `bldg_ext_wall` | str | Exterior wall type code |
+| `bldg_bsmt_type` | str | Basement type code |
+| `bldg_garage_cars` | float | Basement garage car count |
+| `bldg_fireplaces` | float | WBFP_OPENINGS + MET_FIREPL |
+| `is_vacant` | bool | Derived: zero SFLA and zero bldg value |
 | `geometry` | polygon | EPSG:4326 |
 
 **`sales.parquet`** — arm's-length sales:
