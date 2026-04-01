@@ -37,17 +37,17 @@ The following table provides overall results for the entire locality for the Vac
 | Statistic | Berks County | Our results |
 | --- | --- | --- |
 | Count | 58 | 58 |
-| Median ratio |  0.02 |  1.94 |
-| COD | 332.9 | 141.9 |
-| COD 95% conf. range |  200.5 -  526.6 |   93.5 -  235.1 |
+| Median ratio |  0.02 |  1.96 |
+| COD | 332.9 | 137.1 |
+| COD 95% conf. range |  200.5 -  526.6 |   90.7 -  218.4 |
 
 #### Vacant land only (trimmed)
 | Statistic | Berks County | Our results |
 | --- | --- | --- |
 | Count | 55 | 53 |
-| Median ratio |  0.02 |  1.94 |
-| COD | 244.0 |  90.7 |
-| COD 95% conf. range |  159.2 -  463.2 |   65.9 -  132.4 |
+| Median ratio |  0.02 |  1.96 |
+| COD | 244.0 |  88.6 |
+| COD 95% conf. range |  159.2 -  463.2 |   63.8 -  138.4 |
 
 
 

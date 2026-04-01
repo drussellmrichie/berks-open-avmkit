@@ -59,24 +59,28 @@
         "distances": {
           "enabled": true,
           "parks": {
+            "enabled": true,
             "osm": true,
             "max_distance": 2,
             "unit": "km",
             "store_top": false
           },
           "water_bodies": {
+            "enabled": true,
             "osm": true,
             "max_distance": 5,
             "unit": "km",
             "store_top": false
           },
           "educational": {
+            "enabled": true,
             "osm": true,
             "max_distance": 3,
             "unit": "km",
             "store_top": false
           },
           "transportation": {
+            "enabled": true,
             "osm": true,
             "max_distance": 2,
             "unit": "km"
@@ -135,9 +139,9 @@
         "dist_to_osm_parks",
         "dist_to_osm_water_bodies",
         "dist_to_osm_educational",
-        "dist_to_osm_transportation",
+        "median_income",
+        "median_g_rent",
         "neighborhood",
-        "census_tract",
         "school_district",
         "bldg_type"
       ]
@@ -178,7 +182,8 @@
             "dist_to_osm_parks",
             "dist_to_osm_water_bodies",
             "dist_to_osm_educational",
-            "dist_to_osm_transportation",
+            "median_income",
+            "median_g_rent",
             "latitude_norm",
             "longitude_norm",
             "polar_radius",
@@ -203,7 +208,9 @@
             "dist_to_cbd",
             "dist_to_osm_parks",
             "dist_to_osm_water_bodies",
-            "dist_to_osm_transportation",
+            "dist_to_osm_educational",
+            "median_income",
+            "median_g_rent",
             "neighborhood",
             "school_district",
             "cat_is_residential",
@@ -234,7 +241,8 @@
             "dist_to_osm_parks",
             "dist_to_osm_water_bodies",
             "dist_to_osm_educational",
-            "dist_to_osm_transportation",
+            "median_income",
+            "median_g_rent",
             "latitude_norm",
             "longitude_norm",
             "polar_radius",

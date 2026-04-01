@@ -13,7 +13,7 @@ import pandas as pd
 
 SCRIPT_DIR = pathlib.Path(__file__).parent
 DATA_DIR   = SCRIPT_DIR / "data" / "us-pa-berks"
-PARQUET    = DATA_DIR / "out" / "1-assemble-sup.parquet"
+PARQUET    = DATA_DIR / "out" / "look" / "1-assemble-universe.parquet"
 SETTINGS   = DATA_DIR / "in" / "settings.json"
 
 MIN_FILL_RATE = 0.80   # require census_tract on at least 80% of parcels

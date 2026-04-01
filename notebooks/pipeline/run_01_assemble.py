@@ -5,6 +5,13 @@ Execute from the notebooks/pipeline/ directory.
 import os, sys
 os.environ["PYTHONIOENCODING"] = "utf-8"
 
+# Load .env from notebooks/ (contains CENSUS_API_KEY, etc.)
+import pathlib
+_env_file = pathlib.Path(__file__).parent.parent / ".env"
+if _env_file.exists():
+    from dotenv import load_dotenv
+    load_dotenv(_env_file)
+
 # Add repo root to path (same as init_notebooks.setup_environment)
 repo_root = os.path.abspath("../..")
 if repo_root not in sys.path:
