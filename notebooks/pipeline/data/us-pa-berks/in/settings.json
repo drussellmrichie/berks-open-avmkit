@@ -31,7 +31,12 @@
           "assr_impr_value":        ["assr_impr_value",          "float"],
           "assr_market_value":      ["assr_market_value",        "float"],
           "is_vacant":              ["is_vacant",                "bool"],
-          "school_district":        ["school_district",          "str"]
+          "school_district":        ["school_district",          "str"],
+          "luc":                    ["luc",                      "str"],
+          "bldg_area_commercial_sqft": ["bldg_area_commercial_sqft", "float"],
+          "bldg_com_struct":        ["bldg_com_struct",          "str"],
+          "bldg_parking_spaces":    ["bldg_parking_spaces",      "float"],
+          "livunits":               ["livunits",                 "float"]
         }
       },
       "sales": {
@@ -110,7 +115,10 @@
           "bldg_fireplaces"
         ],
         "zero": [
-          "bldg_area_finished_sqft"
+          "bldg_area_finished_sqft",
+          "bldg_area_commercial_sqft",
+          "bldg_parking_spaces",
+          "livunits"
         ]
       }
     }
@@ -201,7 +209,12 @@
             "geom_aspect_ratio",
             "neighborhood",
             "school_district",
-            "bldg_type"
+            "bldg_type",
+            "luc",
+            "bldg_area_commercial_sqft",
+            "bldg_com_struct",
+            "bldg_parking_spaces",
+            "livunits"
           ]
         }
       },
@@ -227,7 +240,8 @@
             "cat_is_residential",
             "cat_is_commercial",
             "cat_is_industrial",
-            "cat_is_farm"
+            "cat_is_farm",
+            "luc"
           ]
         }
       },
@@ -261,7 +275,12 @@
             "polar_angle",
             "geom_aspect_ratio",
             "neighborhood",
-            "school_district"
+            "school_district",
+            "luc",
+            "bldg_area_commercial_sqft",
+            "bldg_com_struct",
+            "bldg_parking_spaces",
+            "livunits"
           ]
         }
       }
@@ -335,7 +354,7 @@
         "bldg_garage_cars",
         "bldg_fireplaces"
       ],
-      "categorical": ["bldg_type", "bldg_ext_wall", "bldg_bsmt_type"]
+      "categorical": ["bldg_type", "bldg_ext_wall", "bldg_bsmt_type", "luc", "bldg_com_struct"]
     }
   },
   "data_dictionary": {}

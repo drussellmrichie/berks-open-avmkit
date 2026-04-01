@@ -3,7 +3,7 @@ Run the 01-assemble notebook logic as a plain Python script.
 Execute from the notebooks/pipeline/ directory.
 """
 import os, sys
-os.environ["PYTHONIOENCODING"] = "utf-8"
+sys.stdout.reconfigure(encoding='utf-8')  # must be called on the live stream; os.environ has no effect after Python starts
 
 # Load .env from notebooks/ (contains CENSUS_API_KEY, etc.)
 import pathlib

@@ -28,7 +28,11 @@ Data sources (all downloaded programmatically via ArcGIS REST API)
    Berks County ArcGIS Online FeatureServer, Table 13
    https://services3.arcgis.com/dGYe1jDYrTw1wwpc/arcgis/rest/services/
        Berks_Assessment_CAMA_Commercial_File/FeatureServer/13
-   Fields used: PARID, PRICE, SALEDT, SALEYR1-3, SALEMTH1-3, SALEPR1-3
+   Fields used: PARID, PRICE, SALEDT, SALEYR1-3, SALEMTH1-3, SALEPR1-3,
+                YRBLT, LUC, STRUCT1, EXTWALL1,
+                AREA1-8 (summed → bldg_area_commercial_sqft),
+                PARKCOVER, PARKUNCOV (summed → bldg_parking_spaces),
+                LIVUNITS (summed across cards → livunits)
    (Covers commercial, industrial, apartment, and farm parcels; primary source of
    non-residential sale history including vacant commercial/industrial land)
 
@@ -65,15 +69,16 @@ Expected outputs
 import argparse
 import math
 import os
+import sys
 import time
+
+sys.stdout.reconfigure(encoding='utf-8')  # must be called on the live stream; os.environ["PYTHONIOENCODING"] has no effect after Python starts
 
 import geopandas as gpd
 import pandas as pd
 import requests
 from pathlib import Path
 from shapely.geometry import shape
-
-os.environ["PYTHONIOENCODING"] = "utf-8"
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -335,6 +340,102 @@ def _extract_sales(cama: pd.DataFrame) -> pd.DataFrame:
     return sales.reset_index(drop=True)
 
 # ---------------------------------------------------------------------------
+# Commercial building attribute aggregation
+# ---------------------------------------------------------------------------
+
+def _aggregate_cama_commercial_bldg(cama_com: pd.DataFrame) -> pd.DataFrame:
+    """
+    Aggregate CAMA Commercial building attributes to one row per PARID.
+
+    CAMA Commercial has one row per building card (CARD 1..TOTCARDS), and each
+    card has up to 8 building sections (AREA1-8, STRUCT1-8, EXTWALL1-8, etc.).
+
+    Strategy:
+      - total building area  = sum of AREA1-8 across all cards for this PARID
+      - primary card         = card with the greatest per-card section area
+      - YRBLT, LUC, STRUCT1, EXTWALL1  = from primary card
+      - bldg_parking_spaces  = sum of (PARKCOVER + PARKUNCOV) across all cards
+      - livunits             = sum of LIVUNITS across all cards
+
+    Returns a DataFrame with one row per PARID and columns:
+      PARID, com_bldg_area_sqft, com_year_built, com_luc,
+      com_struct, com_ext_wall, com_parking_spaces, com_livunits
+    """
+    df = cama_com.copy()
+
+    # Drop rows with no usable PARID
+    df["PARID"] = df["PARID"].astype(str).str.strip()
+    df = df[df["PARID"] != ""].reset_index(drop=True)
+    if df.empty:
+        return pd.DataFrame(columns=[
+            "PARID", "com_bldg_area_sqft", "com_year_built", "com_luc",
+            "com_struct", "com_ext_wall", "com_parking_spaces", "com_livunits",
+        ])
+
+    # Per-card section area: sum AREA1..AREA8
+    area_cols = [c for c in [f"AREA{i}" for i in range(1, 9)] if c in df.columns]
+    if area_cols:
+        df["_card_area"] = (
+            df[area_cols]
+            .apply(pd.to_numeric, errors="coerce")
+            .fillna(0)
+            .sum(axis=1)
+        )
+    else:
+        df["_card_area"] = 0.0
+
+    # Total area per PARID
+    total_area = df.groupby("PARID")["_card_area"].sum()
+
+    # Primary card per PARID (the card with the greatest section area)
+    idx_primary = df.groupby("PARID")["_card_area"].idxmax()
+    primary = df.loc[idx_primary].set_index("PARID")
+
+    # Parking: sum PARKCOVER + PARKUNCOV across all cards
+    park_cols = [c for c in ["PARKCOVER", "PARKUNCOV"] if c in df.columns]
+    if park_cols:
+        parking_sum = (
+            df[["PARID"] + park_cols]
+            .assign(**{c: pd.to_numeric(df[c], errors="coerce").fillna(0) for c in park_cols})
+            .groupby("PARID")[park_cols]
+            .sum()
+            .sum(axis=1)
+        )
+    else:
+        parking_sum = pd.Series(0.0, index=total_area.index)
+
+    # Living units: sum across all cards
+    if "LIVUNITS" in df.columns:
+        livunits_sum = (
+            df.assign(_lu=pd.to_numeric(df["LIVUNITS"], errors="coerce").fillna(0))
+            .groupby("PARID")["_lu"]
+            .sum()
+        )
+    else:
+        livunits_sum = pd.Series(0.0, index=total_area.index)
+
+    # Assemble result
+    result = pd.DataFrame(index=total_area.index)
+    result["com_bldg_area_sqft"] = total_area
+
+    for src, dst in [
+        ("YRBLT",    "com_year_built"),
+        ("LUC",      "com_luc"),
+        ("STRUCT1",  "com_struct"),
+        ("EXTWALL1", "com_ext_wall"),
+    ]:
+        if src in primary.columns:
+            result[dst] = primary[src]
+        else:
+            result[dst] = None
+
+    result["com_parking_spaces"] = parking_sum
+    result["com_livunits"]       = livunits_sum
+
+    return result.reset_index()   # PARID becomes a regular column
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -517,6 +618,27 @@ def main():
         print(f"  WARNING: Join skipped — missing {missing}")
 
     # -----------------------------------------------------------------------
+    # Step 6b: Aggregate and join CAMA Commercial building attributes
+    # -----------------------------------------------------------------------
+    print(f"\n{'='*60}")
+    print("Step 6b: Aggregate and join CAMA Commercial building attributes")
+    com_bldg = _aggregate_cama_commercial_bldg(cama_com)
+    print(f"  {len(com_bldg):,} unique commercial parcels with building data")
+    if "PROPID" in parcels.columns and len(com_bldg) > 0:
+        parcels = parcels.merge(
+            com_bldg,
+            left_on="PROPID", right_on="PARID",
+            how="left",
+            suffixes=("", "_combldg"),
+        )
+        # Drop the duplicate PARID key from the right side of the merge
+        if "PARID_combldg" in parcels.columns:
+            parcels = parcels.drop(columns=["PARID_combldg"])
+        print(f"  After join: {len(parcels):,} rows, {len(parcels.columns)} cols")
+    else:
+        print("  WARNING: Join skipped — PROPID not in parcels or no commercial building data")
+
+    # -----------------------------------------------------------------------
     # Step 7: Apply field mapping
     # -----------------------------------------------------------------------
     print(f"\n{'='*60}")
@@ -536,12 +658,45 @@ def main():
     if "land_area_sqft" in out.columns:
         out["land_area_sqft"] = pd.to_numeric(out["land_area_sqft"], errors="coerce") * 43_560.0
 
+    # Add commercial building attributes from Step 6b
+    COM_FIELD_MAP = {
+        "com_bldg_area_sqft": "bldg_area_commercial_sqft",
+        "com_luc":            "luc",
+        "com_struct":         "bldg_com_struct",
+        "com_parking_spaces": "bldg_parking_spaces",
+        "com_livunits":       "livunits",
+    }
+    for src, dst in COM_FIELD_MAP.items():
+        if src in parcels.columns:
+            out[dst] = parcels[src].values
+
+    # Fill bldg_year_built from commercial YRBLT where residential left it null
+    if "com_year_built" in parcels.columns:
+        com_yr = pd.to_numeric(parcels["com_year_built"].values, errors="coerce")
+        com_yr_series = pd.Series(com_yr, index=out.index)
+        if "bldg_year_built" in out.columns:
+            mask = out["bldg_year_built"].isna() & com_yr_series.notna()
+            out.loc[mask, "bldg_year_built"] = com_yr_series[mask]
+        else:
+            out["bldg_year_built"] = com_yr_series
+
+    # Fill bldg_ext_wall from commercial EXTWALL1 where residential left it null
+    if "com_ext_wall" in parcels.columns:
+        com_wall = pd.Series(parcels["com_ext_wall"].values, index=out.index)
+        com_wall = com_wall.where(com_wall.notna() & (com_wall.astype(str).str.strip() != "None"))
+        if "bldg_ext_wall" in out.columns:
+            mask = out["bldg_ext_wall"].isna() & com_wall.notna()
+            out.loc[mask, "bldg_ext_wall"] = com_wall[mask]
+        else:
+            out["bldg_ext_wall"] = com_wall
+
     # Cast numeric columns
     num_cols = [
         "land_area_sqft", "bldg_area_finished_sqft", "bldg_year_built",
         "bldg_condition_num", "bldg_rooms_bed", "bldg_rooms_bath",
         "bldg_rooms_bath_half", "bldg_stories", "bldg_garage_cars",
         "assr_land_value", "assr_impr_value", "assr_market_value",
+        "bldg_area_commercial_sqft", "bldg_parking_spaces", "livunits",
     ]
     for col in num_cols:
         if col in out.columns:
@@ -595,6 +750,12 @@ def main():
         "  - category_code values are CLASS letter codes: R/A/C/I/F/E/UE/UT\n"
         "  - bldg_condition_num mapped from PHYCOND: 1=Unsound … 6=Very Good\n"
         "  - bldg_quality_num not available (no grade field in CAMA Residential)\n"
+        "  - bldg_year_built and bldg_ext_wall filled from CAMA Commercial for C/I/A parcels\n"
+        "  - bldg_area_commercial_sqft: sum of AREA1-8 across all CAMA Commercial cards\n"
+        "  - luc: land use code from CAMA Commercial primary card\n"
+        "  - bldg_com_struct: structure type (STRUCT1) from CAMA Commercial primary card\n"
+        "  - bldg_parking_spaces: sum of PARKCOVER+PARKUNCOV across all cards\n"
+        "  - livunits: sum of LIVUNITS across all cards (relevant for CLASS=A)\n"
         "  - sales.parquet combines Residential + Commercial + Master sale history\n"
         "    Arm's-length heuristic: valid_sale = price >= $10k\n"
         "  - Verify CLASS code distribution against model_groups in settings.json"

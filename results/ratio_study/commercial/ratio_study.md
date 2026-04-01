@@ -38,16 +38,16 @@ The following table provides overall results for the entire locality for the Com
 | --- | --- | --- |
 | Count | 35 | 35 |
 | Median ratio |  0.24 |  3.85 |
-| COD |  92.7 | 271.6 |
-| COD 95% conf. range |   56.8 -  271.5 |  118.8 -  651.7 |
+| COD |  92.7 | 270.2 |
+| COD 95% conf. range |   56.8 -  271.5 |  120.7 -  668.4 |
 
 #### Vacant land only (trimmed)
 | Statistic | Berks County | Our results |
 | --- | --- | --- |
 | Count | 34 | 31 |
 | Median ratio |  0.24 |  3.85 |
-| COD |  74.0 | 147.4 |
-| COD 95% conf. range |   51.7 -  238.5 |   87.2 -  300.7 |
+| COD |  74.0 | 145.6 |
+| COD 95% conf. range |   51.7 -  238.5 |   87.6 -  304.7 |
 
 
 

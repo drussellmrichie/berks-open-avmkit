@@ -3,7 +3,7 @@ Run the 02-clean notebook logic as a plain Python script.
 Execute from the notebooks/pipeline/ directory.
 """
 import os, sys
-os.environ["PYTHONIOENCODING"] = "utf-8"
+sys.stdout.reconfigure(encoding='utf-8')  # must be called on the live stream; os.environ has no effect after Python starts
 
 repo_root = os.path.abspath("../..")
 if repo_root not in sys.path:

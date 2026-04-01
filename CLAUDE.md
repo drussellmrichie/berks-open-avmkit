@@ -136,6 +136,13 @@ Confirmed source columns (from Berks County GIS server, verified against live da
 | `dist_to_osm_educational` | derived | openavmkit OSM enrichment | Distance to nearest university/college (km) |
 | `dist_to_osm_highway_on_ramps` | derived | openavmkit OSM enrichment | Distance to nearest highway on-ramp/motorway junction (km) |
 | `is_vacant` | derived | | Zero SFLA and zero `assr_impr_value` |
+| `luc` | `LUC` | CAMA Commercial (FeatureServer/13) | Land use code — distinguishes retail/office/industrial/warehouse within C/I/A |
+| `bldg_area_commercial_sqft` | derived | CAMA Commercial | Sum of AREA1-8 across all cards for this parcel |
+| `bldg_com_struct` | `STRUCT1` | CAMA Commercial | Primary building structure type code (from card with max area) |
+| `bldg_parking_spaces` | derived | CAMA Commercial | Sum of PARKCOVER+PARKUNCOV across all cards |
+| `livunits` | derived | CAMA Commercial | Sum of LIVUNITS across all cards; relevant for CLASS=A apartments |
+| `bldg_year_built` (C/I/A) | `YRBLT` | CAMA Commercial | Fills residential `bldg_year_built` where null (non-residential parcels) |
+| `bldg_ext_wall` (C/I/A) | `EXTWALL1` | CAMA Commercial | Fills residential `bldg_ext_wall` where null (non-residential parcels) |
 
 **Zoning is not available in the Berks GIS data and has been removed from the model.**
 **`bldg_quality_num` does not exist — CAMA Residential has no grade/quality field.**
@@ -146,7 +153,7 @@ CAMA data dictionary PDF: in `data/us-pa-berks/in/` (downloaded from opendata.be
 #### `data.process`
 - **Census enrichment:** FIPS `42011` — requires `CENSUS_API_KEY` in `notebooks/.env`. Produces socioeconomic aggregates at census block group level (`median_income`, `total_population`, `median_g_rent`, `median_c_rent`). Does **not** produce a `census_tract` ID column — openavmkit's enrichment joins block group stats, not tract IDs.
 - **OSM enrichment:** `distances` enrichment enabled — parks (2km), water_bodies (5km), educational (3km), highway_on_ramps (10km); aggregate `dist_to_osm_*` columns only (`store_top: false`). The `highway_on_ramps` entry uses a custom `osm_tags: {"highway": ["motorway_junction"]}` to capture I-176, US-422, US-222, and US-30 access points. Transportation is configured but returns empty (Berks has no passenger rail; openavmkit queries `railway: [rail, subway, light_rail, monorail, tram]`). **Important:** each per-feature config in `settings.json` must include `"enabled": true` — openavmkit's `get_features()` checks this flag on the per-feature dict, not the top-level `distances` dict.
-- **Null-fill:** `median_impr` for 7 building fields (`bldg_condition_num`, `bldg_stories`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_rooms_bed`, `bldg_garage_cars`, `bldg_fireplaces`); `zero` for `bldg_area_finished_sqft`
+- **Null-fill:** `median_impr` for 7 building fields (`bldg_condition_num`, `bldg_stories`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_rooms_bed`, `bldg_garage_cars`, `bldg_fireplaces`); `zero` for `bldg_area_finished_sqft`, `bldg_area_commercial_sqft`, `bldg_parking_spaces`, `livunits`
 - **Dupe handling:** drop on `key` (parcels), drop on `key_sale` (sales)
 
 #### `modeling.metadata`
@@ -165,9 +172,9 @@ Four groups, filtered by `category_code` or `is_vacant`:
 | `vacant` | `is_vacant == true` |
 
 #### `modeling.models` — independent variables
-- **main** (27 features): `bldg_area_finished_sqft`, `land_area_sqft`, `bldg_condition_num`, `bldg_age_years`, `bldg_rooms_bed`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_stories`, `bldg_garage_cars`, `bldg_fireplaces`, `bldg_ext_wall`, `bldg_bsmt_type`, `dist_to_cbd`, `dist_to_osm_parks`, `dist_to_osm_water_bodies`, `dist_to_osm_educational`, `dist_to_osm_highway_on_ramps`, `median_income`, `median_g_rent`, `latitude_norm`, `longitude_norm`, `polar_radius`, `polar_angle`, `geom_aspect_ratio`, `neighborhood`, `school_district`, `bldg_type`
-- **vacant** (20 features): `land_area_sqft`, `land_area_sqft_log`, `latitude_norm`, `longitude_norm`, `polar_angle`, `polar_radius`, `geom_rectangularity_num`, `dist_to_cbd`, `dist_to_osm_parks`, `dist_to_osm_water_bodies`, `dist_to_osm_educational`, `dist_to_osm_highway_on_ramps`, `median_income`, `median_g_rent`, `neighborhood`, `school_district`, `cat_is_residential`, `cat_is_commercial`, `cat_is_industrial`, `cat_is_farm`
-- **hedonic** (28 features): `bldg_area_finished_sqft`, `land_area_sqft`, `land_area_sqft_log`, `bldg_condition_num`, `bldg_age_years`, `bldg_rooms_bed`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_stories`, `bldg_garage_cars`, `bldg_fireplaces`, `bldg_ext_wall`, `bldg_bsmt_type`, `bldg_type`, `dist_to_cbd`, `dist_to_osm_parks`, `dist_to_osm_water_bodies`, `dist_to_osm_educational`, `dist_to_osm_highway_on_ramps`, `median_income`, `median_g_rent`, `latitude_norm`, `longitude_norm`, `polar_radius`, `polar_angle`, `geom_aspect_ratio`, `neighborhood`, `school_district`
+- **main** (31 features): `bldg_area_finished_sqft`, `land_area_sqft`, `bldg_condition_num`, `bldg_age_years`, `bldg_rooms_bed`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_stories`, `bldg_garage_cars`, `bldg_fireplaces`, `bldg_ext_wall`, `bldg_bsmt_type`, `dist_to_cbd`, `dist_to_osm_parks`, `dist_to_osm_water_bodies`, `dist_to_osm_educational`, `dist_to_osm_highway_on_ramps`, `median_income`, `median_g_rent`, `latitude_norm`, `longitude_norm`, `polar_radius`, `polar_angle`, `geom_aspect_ratio`, `neighborhood`, `school_district`, `bldg_type`, `luc`, `bldg_area_commercial_sqft`, `bldg_com_struct`, `bldg_parking_spaces`, `livunits`
+- **vacant** (21 features): `land_area_sqft`, `land_area_sqft_log`, `latitude_norm`, `longitude_norm`, `polar_angle`, `polar_radius`, `geom_rectangularity_num`, `dist_to_cbd`, `dist_to_osm_parks`, `dist_to_osm_water_bodies`, `dist_to_osm_educational`, `dist_to_osm_highway_on_ramps`, `median_income`, `median_g_rent`, `neighborhood`, `school_district`, `cat_is_residential`, `cat_is_commercial`, `cat_is_industrial`, `cat_is_farm`, `luc`
+- **hedonic** (32 features): `bldg_area_finished_sqft`, `land_area_sqft`, `land_area_sqft_log`, `bldg_condition_num`, `bldg_age_years`, `bldg_rooms_bed`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_stories`, `bldg_garage_cars`, `bldg_fireplaces`, `bldg_ext_wall`, `bldg_bsmt_type`, `bldg_type`, `dist_to_cbd`, `dist_to_osm_parks`, `dist_to_osm_water_bodies`, `dist_to_osm_educational`, `dist_to_osm_highway_on_ramps`, `median_income`, `median_g_rent`, `latitude_norm`, `longitude_norm`, `polar_radius`, `polar_angle`, `geom_aspect_ratio`, `neighborhood`, `school_district`, `luc`, `bldg_area_commercial_sqft`, `bldg_com_struct`, `bldg_parking_spaces`, `livunits`
 
 #### `modeling.instructions`
 - Main + vacant + hedonic: `["lightgbm"]`
@@ -184,7 +191,7 @@ Four groups, filtered by `category_code` or `is_vacant`:
 #### `field_classification`
 - `loc_neighborhood` → `neighborhood`; `loc_market_area` → `census_tract`
 - Land numeric: `land_area_sqft`; land categorical: `neighborhood`, `census_tract`, `school_district`
-- Improvement numeric: area, age, condition, rooms, stories, garage, fireplaces; categorical: `bldg_type`, `bldg_ext_wall`, `bldg_bsmt_type`
+- Improvement numeric: area, age, condition, rooms, stories, garage, fireplaces; categorical: `bldg_type`, `bldg_ext_wall`, `bldg_bsmt_type`, `luc`, `bldg_com_struct`
 
 ### Berks-Specific Enrichment in `run_03_model.py`
 
@@ -220,6 +227,7 @@ The same patches applied to `philly_open_avmkit` are required here. See `philly_
 | `utilities/data.py` | `div_series_z_safe` | `to_numpy(dtype=np.float64)` fails on Arrow-backed nullable columns — add `na_value=np.nan` |
 | `utilities/stats.py` | `calc_correlations` | `df_score` unbound if loop breaks on first pass (all-NA scores in small model groups) — initialize to `None` and early-return empty DataFrame |
 | `ratio_study.py` | `_run_ratio_study_breakdowns` | `np.quantile` returns NaN for all-NaN columns; NaN passes `not in bins` check and breaks `pd.cut` — skip NaN quantile values and guard for `len(bins) < 2` |
+| `utilities/stats.py` | `calc_r2` | `.astype(float)` on Arrow-backed string columns (e.g. `luc`, `bldg_com_struct`) raises `ValueError`; add `pd.api.types.is_numeric_dtype` guard to skip non-numeric vars with NaN R² |
 
 ### Data Acquisition Status
 
@@ -227,7 +235,7 @@ The same patches applied to `philly_open_avmkit` are required here. See `philly_
 - Downloads 156,778 parcel polygons from Layer 0 (geometry + CLASS/ACREAGE/MUNICIPALNAME/SCHOOL)
 - Joins CAMA_Master (Layer 3) for LAND_VALUE, BLDG_VALUE, TOTAL_VALUE
 - Joins CAMA Residential (FeatureServer/15) for SFLA, YRBLT, PHYCOND, BEDROOMS, FULLBATHS, HALFBATHS, STORIES, STYLE, EXTWALL, BSMT, BASE_GARAGE, WBFP_OPENINGS, MET_FIREPL
-- Joins CAMA Commercial (FeatureServer/13) for sale history on commercial/industrial/apartment/farm parcels
+- Joins CAMA Commercial (FeatureServer/13) for sale history and building attributes (YRBLT, LUC, STRUCT1, EXTWALL1, AREA1-8, PARKCOVER, PARKUNCOV, LIVUNITS) on commercial/industrial/apartment/farm parcels
 - Extracts sales from all three sources: Residential + Commercial + CAMA_Master (catch-all); deduped by `key_sale` then by `(key, sale_date, sale_price)`; portfolio/bulk sales (same price+date, 5+ parcels) flagged invalid
 - Outputs: `berks_parcels.parquet` (156,778 rows) and `sales.parquet` (record counts vary by run)
 
@@ -263,6 +271,11 @@ CAMA Commercial FeatureServer: `https://services3.arcgis.com/dGYe1jDYrTw1wwpc/ar
 | `bldg_bsmt_type` | str | Basement type code |
 | `bldg_garage_cars` | float | Basement garage car count |
 | `bldg_fireplaces` | float | WBFP_OPENINGS + MET_FIREPL |
+| `luc` | str | Land use code (CAMA Commercial); null for CLASS=R |
+| `bldg_area_commercial_sqft` | float | Sum of AREA1-8 across all CAMA Commercial cards |
+| `bldg_com_struct` | str | Primary structure type from CAMA Commercial |
+| `bldg_parking_spaces` | float | Total parking spaces (PARKCOVER+PARKUNCOV) |
+| `livunits` | float | Total living units (CLASS=A apartments) |
 | `is_vacant` | bool | Derived: zero SFLA and zero bldg value |
 | `geometry` | polygon | EPSG:4326 |
 
@@ -287,16 +300,18 @@ CAMA Commercial FeatureServer: `https://services3.arcgis.com/dGYe1jDYrTw1wwpc/ar
 - Install openavmkit: `pip install openavmkit`
 - No `requirements.txt` or `pyproject.toml` in the repo; external dependencies are `openavmkit` and `python-dotenv`
 - `matplotlib` must use `"Agg"` backend (set in `run_03_model.py`) to prevent GUI hangs in subprocess execution
-- `PYTHONIOENCODING=utf-8` and `PYTHONUNBUFFERED=1` set in all pipeline scripts
+- All pipeline scripts call `sys.stdout.reconfigure(encoding='utf-8')` at startup. **Note:** setting `os.environ["PYTHONIOENCODING"]` inside a running Python process has no effect on already-opened stdout — the reconfigure call on the live stream is required.
 
 ## Published Results (tracked)
 
 `results/ratio_study/{group}/ratio_study.{html,md}` — manually copied from `out/models/*/reports/` after a meaningful pipeline run. Update these when the model improves significantly.
 
-**Current results (2026-04-01):** First run with OSM + census enrichment active.
-- `residential_sf`: median_ratio=1.00, COD=12.8 (trimmed) — excellent
-- `vacant`: median_ratio=1.01, COD=23.6 (trimmed) — well-calibrated
-- `commercial`: median_ratio=3.7–4.1 — data sparsity / no income data
+**Current results (2026-04-01):** Added CAMA Commercial building attributes (luc, bldg_area_commercial_sqft, bldg_com_struct, bldg_parking_spaces, livunits) to feature set.
+- `residential_sf` improved: median_ratio=1.03, COD=12.6 (trimmed) — excellent, unchanged from prior run
+- `residential_sf` vacant land: median_ratio=1.39, COD=73.6 (trimmed)
+- `vacant` standalone: median_ratio=1.87, COD=86.6 (trimmed)
+- `commercial` improved: median_ratio=2.73 (1 test sale — statistically meaningless)
+- `commercial` vacant land: median_ratio=3.85, COD=145.6 (trimmed) — improved from ~270 untrimmed prior run; still data-limited
 
 ## Data Files (gitignored)
 

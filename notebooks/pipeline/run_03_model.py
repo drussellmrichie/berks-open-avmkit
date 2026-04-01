@@ -7,9 +7,8 @@ import matplotlib
 matplotlib.use("Agg")  # non-interactive backend — prevents GUI hang in subprocesses
 import numpy as np
 import pandas as pd
-os.environ["PYTHONIOENCODING"] = "utf-8"
 os.environ["PYTHONUNBUFFERED"] = "1"  # force unbuffered stdout so progress appears in real time
-sys.stdout.reconfigure(line_buffering=True)
+sys.stdout.reconfigure(encoding='utf-8', line_buffering=True)  # must be called on the live stream; os.environ["PYTHONIOENCODING"] has no effect after Python starts
 
 repo_root = os.path.abspath("../..")
 if repo_root not in sys.path:
