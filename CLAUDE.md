@@ -59,7 +59,7 @@ berks-open-avmkit/
 | Script | Status | Purpose |
 |---|---|---|
 | `download_berks_parcels.py` | **Complete** | Downloads parcel geometry + CAMA_Master + CAMA Residential; outputs `berks_parcels.parquet` + `sales.parquet` |
-| `process_berks.py` | **TODO** | Not needed — sales are extracted from CAMA Residential in `download_berks_parcels.py` |
+| `process_berks.py` | **Complete** | Validates `berks_parcels.parquet` + `sales.parquet` schema, key uniqueness, null rates, and coverage stats; run after download to confirm files are pipeline-ready |
 | `run_01_assemble.py` | Ready | Merge parcels + sales; tag model groups; enrich with census/OSM |
 | `check_census_and_patch.py` | **First run only** | Verify `census_tract` fill rate ≥80%; add it to `main`/`hedonic` `ind_vars` in `settings.json` |
 | `run_02_clean.py` | Ready | Horizontal equity clustering; sales scrutiny; null-fill |
