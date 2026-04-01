@@ -84,6 +84,14 @@
             "osm": true,
             "max_distance": 2,
             "unit": "km"
+          },
+          "highway_on_ramps": {
+            "enabled": true,
+            "osm": true,
+            "osm_tags": {"highway": ["motorway_junction"]},
+            "max_distance": 10,
+            "unit": "km",
+            "store_top": false
           }
         }
       },
@@ -139,6 +147,7 @@
         "dist_to_osm_parks",
         "dist_to_osm_water_bodies",
         "dist_to_osm_educational",
+        "dist_to_osm_highway_on_ramps",
         "median_income",
         "median_g_rent",
         "neighborhood",
@@ -182,6 +191,7 @@
             "dist_to_osm_parks",
             "dist_to_osm_water_bodies",
             "dist_to_osm_educational",
+            "dist_to_osm_highway_on_ramps",
             "median_income",
             "median_g_rent",
             "latitude_norm",
@@ -209,6 +219,7 @@
             "dist_to_osm_parks",
             "dist_to_osm_water_bodies",
             "dist_to_osm_educational",
+            "dist_to_osm_highway_on_ramps",
             "median_income",
             "median_g_rent",
             "neighborhood",
@@ -241,6 +252,7 @@
             "dist_to_osm_parks",
             "dist_to_osm_water_bodies",
             "dist_to_osm_educational",
+            "dist_to_osm_highway_on_ramps",
             "median_income",
             "median_g_rent",
             "latitude_norm",

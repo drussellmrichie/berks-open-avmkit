@@ -3,19 +3,6 @@ Berks County-specific enrichment helpers used in run_03_model.py.
 
 Extracted into a separate module so they can be imported and unit-tested
 without triggering the openavmkit pipeline side-effects in run_03_model.py.
-
-TODO: Add transit/highway access features
-  openavmkit's built-in "transportation" OSM type queries for rail only
-  (railway: rail/subway/light_rail/monorail/tram), which returns nothing for
-  Berks County (no passenger rail). Two options:
-  1. Highway on-ramps: add a custom distances entry to settings.json using
-     osm_tags: {"highway": ["motorway_junction"]} with a larger max_distance
-     (e.g. 10 km). Covers I-176, US-422, US-222, US-30 access.
-  2. BARTA bus stops: add osm_tags: {"highway": ["bus_stop"]} or
-     {"public_transport": ["stop_position"]} to settings.json distances, or
-     compute similarly to add_dist_to_cbd() using BARTA's published GTFS/GIS
-     stop coordinates. Add resulting column to ind_vars in settings.json.
-  Both are berks-specific config/data — no changes to openavmkit needed.
 """
 
 import numpy as np
