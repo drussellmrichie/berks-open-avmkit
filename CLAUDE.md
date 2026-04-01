@@ -18,6 +18,9 @@ cd notebooks/pipeline
 # Stage 1: Assemble raw data into a SalesUniversePair
 python run_01_assemble.py
 
+# (First run only) Verify census_tract populated and add it to model ind_vars
+python check_census_and_patch.py
+
 # Stage 2: Clean data, run sales scrutiny, build equity clusters
 python run_02_clean.py
 
@@ -43,6 +46,7 @@ berks-open-avmkit/
     ├── download_berks_parcels.py     # Data acquisition — downloads parcels, CAMA, and sales via ArcGIS REST
     ├── process_berks.py              # Data processing stub — NOT YET IMPLEMENTED
     ├── run_01_assemble.py            # Pipeline stage 1: assemble
+    ├── check_census_and_patch.py     # (First run only) verify census_tract + patch settings.json
     ├── run_02_clean.py               # Pipeline stage 2: clean
     ├── run_03_model.py               # Pipeline stage 3: model
     └── data/us-pa-berks/
@@ -57,6 +61,7 @@ berks-open-avmkit/
 | `download_berks_parcels.py` | **Complete** | Downloads parcel geometry + CAMA_Master + CAMA Residential; outputs `berks_parcels.parquet` + `sales.parquet` |
 | `process_berks.py` | **TODO** | Not needed — sales are extracted from CAMA Residential in `download_berks_parcels.py` |
 | `run_01_assemble.py` | Ready | Merge parcels + sales; tag model groups; enrich with census/OSM |
+| `check_census_and_patch.py` | **First run only** | Verify `census_tract` fill rate ≥80%; add it to `main`/`hedonic` `ind_vars` in `settings.json` |
 | `run_02_clean.py` | Ready | Horizontal equity clustering; sales scrutiny; null-fill |
 | `run_03_model.py` | Ready | Berks enrichment + LightGBM training (main + vacant) |
 
