@@ -56,8 +56,31 @@
           "enabled": true,
           "fips": "42011"
         },
-        "osm": {
-          "enabled": true
+        "distances": {
+          "enabled": true,
+          "parks": {
+            "osm": true,
+            "max_distance": 2,
+            "unit": "km",
+            "store_top": false
+          },
+          "water_bodies": {
+            "osm": true,
+            "max_distance": 5,
+            "unit": "km",
+            "store_top": false
+          },
+          "educational": {
+            "osm": true,
+            "max_distance": 3,
+            "unit": "km",
+            "store_top": false
+          },
+          "transportation": {
+            "osm": true,
+            "max_distance": 2,
+            "unit": "km"
+          }
         }
       },
       "dupes": {
@@ -109,6 +132,10 @@
         "geom_rectangularity_num",
         "geom_aspect_ratio",
         "dist_to_cbd",
+        "dist_to_osm_parks",
+        "dist_to_osm_water_bodies",
+        "dist_to_osm_educational",
+        "dist_to_osm_transportation",
         "neighborhood",
         "census_tract",
         "school_district",
@@ -148,6 +175,10 @@
             "bldg_ext_wall",
             "bldg_bsmt_type",
             "dist_to_cbd",
+            "dist_to_osm_parks",
+            "dist_to_osm_water_bodies",
+            "dist_to_osm_educational",
+            "dist_to_osm_transportation",
             "latitude_norm",
             "longitude_norm",
             "polar_radius",
@@ -170,6 +201,9 @@
             "polar_radius",
             "geom_rectangularity_num",
             "dist_to_cbd",
+            "dist_to_osm_parks",
+            "dist_to_osm_water_bodies",
+            "dist_to_osm_transportation",
             "neighborhood",
             "school_district",
             "cat_is_residential",
@@ -197,6 +231,10 @@
             "bldg_bsmt_type",
             "bldg_type",
             "dist_to_cbd",
+            "dist_to_osm_parks",
+            "dist_to_osm_water_bodies",
+            "dist_to_osm_educational",
+            "dist_to_osm_transportation",
             "latitude_norm",
             "longitude_norm",
             "polar_radius",

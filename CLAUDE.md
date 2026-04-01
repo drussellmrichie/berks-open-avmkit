@@ -134,7 +134,7 @@ CAMA data dictionary PDF: in `data/us-pa-berks/in/` (downloaded from opendata.be
 
 #### `data.process`
 - **Census enrichment:** FIPS `42011` — **currently non-functional** (no Census API key set); `census_tract` will be absent from output and must not appear in `ind_vars`
-- **OSM enrichment:** enabled
+- **OSM enrichment:** `distances` enrichment enabled — parks (2km), water_bodies (5km), educational (3km), transportation (2km); aggregate `dist_to_osm_*` columns only (`store_top: false`). Note: the formerly-used `"osm": {"enabled": true}` key was silently ignored by the library; the correct key is `distances`.
 - **Null-fill:** `median_impr` for 7 building fields (`bldg_condition_num`, `bldg_stories`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_rooms_bed`, `bldg_garage_cars`, `bldg_fireplaces`); `zero` for `bldg_area_finished_sqft`
 - **Dupe handling:** drop on `key` (parcels), drop on `key_sale` (sales)
 
@@ -154,9 +154,9 @@ Four groups, filtered by `category_code` or `is_vacant`:
 | `vacant` | `is_vacant == true` |
 
 #### `modeling.models` — independent variables
-- **main** (21 features): `bldg_area_finished_sqft`, `land_area_sqft`, `bldg_condition_num`, `bldg_age_years`, `bldg_rooms_bed`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_stories`, `bldg_garage_cars`, `bldg_fireplaces`, `bldg_ext_wall`, `bldg_bsmt_type`, `dist_to_cbd`, `latitude_norm`, `longitude_norm`, `polar_radius`, `polar_angle`, `geom_aspect_ratio`, `neighborhood`, `school_district`, `bldg_type`
-- **vacant** (10 features): `land_area_sqft`, `land_area_sqft_log`, `latitude_norm`, `longitude_norm`, `polar_angle`, `polar_radius`, `geom_rectangularity_num`, `dist_to_cbd`, `neighborhood`, `school_district`
-- **hedonic** (22 features): `bldg_area_finished_sqft`, `land_area_sqft`, `land_area_sqft_log`, `bldg_condition_num`, `bldg_age_years`, `bldg_rooms_bed`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_stories`, `bldg_garage_cars`, `bldg_fireplaces`, `bldg_ext_wall`, `bldg_bsmt_type`, `bldg_type`, `dist_to_cbd`, `latitude_norm`, `longitude_norm`, `polar_radius`, `polar_angle`, `geom_aspect_ratio`, `neighborhood`, `school_district`
+- **main** (25 features): `bldg_area_finished_sqft`, `land_area_sqft`, `bldg_condition_num`, `bldg_age_years`, `bldg_rooms_bed`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_stories`, `bldg_garage_cars`, `bldg_fireplaces`, `bldg_ext_wall`, `bldg_bsmt_type`, `dist_to_cbd`, `dist_to_osm_parks`, `dist_to_osm_water_bodies`, `dist_to_osm_educational`, `dist_to_osm_transportation`, `latitude_norm`, `longitude_norm`, `polar_radius`, `polar_angle`, `geom_aspect_ratio`, `neighborhood`, `school_district`, `bldg_type`
+- **vacant** (13 features): `land_area_sqft`, `land_area_sqft_log`, `latitude_norm`, `longitude_norm`, `polar_angle`, `polar_radius`, `geom_rectangularity_num`, `dist_to_cbd`, `dist_to_osm_parks`, `dist_to_osm_water_bodies`, `dist_to_osm_transportation`, `neighborhood`, `school_district`
+- **hedonic** (26 features): `bldg_area_finished_sqft`, `land_area_sqft`, `land_area_sqft_log`, `bldg_condition_num`, `bldg_age_years`, `bldg_rooms_bed`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_stories`, `bldg_garage_cars`, `bldg_fireplaces`, `bldg_ext_wall`, `bldg_bsmt_type`, `bldg_type`, `dist_to_cbd`, `dist_to_osm_parks`, `dist_to_osm_water_bodies`, `dist_to_osm_educational`, `dist_to_osm_transportation`, `latitude_norm`, `longitude_norm`, `polar_radius`, `polar_angle`, `geom_aspect_ratio`, `neighborhood`, `school_district`
 
 #### `modeling.instructions`
 - Main + vacant + hedonic: `["lightgbm"]`
