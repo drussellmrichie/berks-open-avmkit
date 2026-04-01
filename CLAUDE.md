@@ -134,6 +134,7 @@ Confirmed source columns (from Berks County GIS server, verified against live da
 | `dist_to_osm_parks` | derived | openavmkit OSM enrichment | Distance to nearest park (km) |
 | `dist_to_osm_water_bodies` | derived | openavmkit OSM enrichment | Distance to nearest water body (km) |
 | `dist_to_osm_educational` | derived | openavmkit OSM enrichment | Distance to nearest university/college (km) |
+| `dist_to_osm_highway_on_ramps` | derived | openavmkit OSM enrichment | Distance to nearest highway on-ramp/motorway junction (km) |
 | `is_vacant` | derived | | Zero SFLA and zero `assr_impr_value` |
 
 **Zoning is not available in the Berks GIS data and has been removed from the model.**
@@ -144,7 +145,7 @@ CAMA data dictionary PDF: in `data/us-pa-berks/in/` (downloaded from opendata.be
 
 #### `data.process`
 - **Census enrichment:** FIPS `42011` — requires `CENSUS_API_KEY` in `notebooks/.env`. Produces socioeconomic aggregates at census block group level (`median_income`, `total_population`, `median_g_rent`, `median_c_rent`). Does **not** produce a `census_tract` ID column — openavmkit's enrichment joins block group stats, not tract IDs.
-- **OSM enrichment:** `distances` enrichment enabled — parks (2km), water_bodies (5km), educational (3km); aggregate `dist_to_osm_*` columns only (`store_top: false`). Transportation is configured but returns empty (Berks has no passenger rail; openavmkit queries `railway: [rail, subway, light_rail, monorail, tram]`). **Important:** each per-feature config in `settings.json` must include `"enabled": true` — openavmkit's `get_features()` checks this flag on the per-feature dict, not the top-level `distances` dict.
+- **OSM enrichment:** `distances` enrichment enabled — parks (2km), water_bodies (5km), educational (3km), highway_on_ramps (10km); aggregate `dist_to_osm_*` columns only (`store_top: false`). The `highway_on_ramps` entry uses a custom `osm_tags: {"highway": ["motorway_junction"]}` to capture I-176, US-422, US-222, and US-30 access points. Transportation is configured but returns empty (Berks has no passenger rail; openavmkit queries `railway: [rail, subway, light_rail, monorail, tram]`). **Important:** each per-feature config in `settings.json` must include `"enabled": true` — openavmkit's `get_features()` checks this flag on the per-feature dict, not the top-level `distances` dict.
 - **Null-fill:** `median_impr` for 7 building fields (`bldg_condition_num`, `bldg_stories`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_rooms_bed`, `bldg_garage_cars`, `bldg_fireplaces`); `zero` for `bldg_area_finished_sqft`
 - **Dupe handling:** drop on `key` (parcels), drop on `key_sale` (sales)
 
@@ -164,9 +165,9 @@ Four groups, filtered by `category_code` or `is_vacant`:
 | `vacant` | `is_vacant == true` |
 
 #### `modeling.models` — independent variables
-- **main** (26 features): `bldg_area_finished_sqft`, `land_area_sqft`, `bldg_condition_num`, `bldg_age_years`, `bldg_rooms_bed`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_stories`, `bldg_garage_cars`, `bldg_fireplaces`, `bldg_ext_wall`, `bldg_bsmt_type`, `dist_to_cbd`, `dist_to_osm_parks`, `dist_to_osm_water_bodies`, `dist_to_osm_educational`, `median_income`, `median_g_rent`, `latitude_norm`, `longitude_norm`, `polar_radius`, `polar_angle`, `geom_aspect_ratio`, `neighborhood`, `school_district`, `bldg_type`
-- **vacant** (15 features): `land_area_sqft`, `land_area_sqft_log`, `latitude_norm`, `longitude_norm`, `polar_angle`, `polar_radius`, `geom_rectangularity_num`, `dist_to_cbd`, `dist_to_osm_parks`, `dist_to_osm_water_bodies`, `dist_to_osm_educational`, `median_income`, `median_g_rent`, `neighborhood`, `school_district`, `cat_is_residential`, `cat_is_commercial`, `cat_is_industrial`, `cat_is_farm`
-- **hedonic** (27 features): `bldg_area_finished_sqft`, `land_area_sqft`, `land_area_sqft_log`, `bldg_condition_num`, `bldg_age_years`, `bldg_rooms_bed`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_stories`, `bldg_garage_cars`, `bldg_fireplaces`, `bldg_ext_wall`, `bldg_bsmt_type`, `bldg_type`, `dist_to_cbd`, `dist_to_osm_parks`, `dist_to_osm_water_bodies`, `dist_to_osm_educational`, `median_income`, `median_g_rent`, `latitude_norm`, `longitude_norm`, `polar_radius`, `polar_angle`, `geom_aspect_ratio`, `neighborhood`, `school_district`
+- **main** (27 features): `bldg_area_finished_sqft`, `land_area_sqft`, `bldg_condition_num`, `bldg_age_years`, `bldg_rooms_bed`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_stories`, `bldg_garage_cars`, `bldg_fireplaces`, `bldg_ext_wall`, `bldg_bsmt_type`, `dist_to_cbd`, `dist_to_osm_parks`, `dist_to_osm_water_bodies`, `dist_to_osm_educational`, `dist_to_osm_highway_on_ramps`, `median_income`, `median_g_rent`, `latitude_norm`, `longitude_norm`, `polar_radius`, `polar_angle`, `geom_aspect_ratio`, `neighborhood`, `school_district`, `bldg_type`
+- **vacant** (20 features): `land_area_sqft`, `land_area_sqft_log`, `latitude_norm`, `longitude_norm`, `polar_angle`, `polar_radius`, `geom_rectangularity_num`, `dist_to_cbd`, `dist_to_osm_parks`, `dist_to_osm_water_bodies`, `dist_to_osm_educational`, `dist_to_osm_highway_on_ramps`, `median_income`, `median_g_rent`, `neighborhood`, `school_district`, `cat_is_residential`, `cat_is_commercial`, `cat_is_industrial`, `cat_is_farm`
+- **hedonic** (28 features): `bldg_area_finished_sqft`, `land_area_sqft`, `land_area_sqft_log`, `bldg_condition_num`, `bldg_age_years`, `bldg_rooms_bed`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_stories`, `bldg_garage_cars`, `bldg_fireplaces`, `bldg_ext_wall`, `bldg_bsmt_type`, `bldg_type`, `dist_to_cbd`, `dist_to_osm_parks`, `dist_to_osm_water_bodies`, `dist_to_osm_educational`, `dist_to_osm_highway_on_ramps`, `median_income`, `median_g_rent`, `latitude_norm`, `longitude_norm`, `polar_radius`, `polar_angle`, `geom_aspect_ratio`, `neighborhood`, `school_district`
 
 #### `modeling.instructions`
 - Main + vacant + hedonic: `["lightgbm"]`
