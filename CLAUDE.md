@@ -18,9 +18,6 @@ cd notebooks/pipeline
 # Stage 1: Assemble raw data into a SalesUniversePair
 python run_01_assemble.py
 
-# (First run only) Verify census_tract populated and add it to model ind_vars
-python check_census_and_patch.py
-
 # Stage 2: Clean data, run sales scrutiny, build equity clusters
 python run_02_clean.py
 
@@ -29,6 +26,8 @@ python run_03_model.py
 ```
 
 **Note (original dev environment):** The project was developed on Windows with `C:/Users/druss/miniconda3/python.exe`. On that system, replace `python` with that full path to avoid the Microsoft Store Python stub.
+
+**Census API key:** Store in `notebooks/.env` as `CENSUS_API_KEY=<key>`. `run_01_assemble.py` loads this file automatically via `python-dotenv`. The `.env` file is gitignored.
 
 `openavmkit` uses a checkpoint system (`out/checkpoints/`). Each `run_03_model.py` call clears the `3-model` checkpoints at startup (except the spatial-lag checkpoint `3-model-00-enrich-spatial-lag`, which is expensive to recompute). If you need a full fresh run, delete all files in `out/checkpoints/` manually.
 
@@ -61,7 +60,7 @@ berks-open-avmkit/
 | `download_berks_parcels.py` | **Complete** | Downloads parcel geometry + CAMA_Master + CAMA Residential; outputs `berks_parcels.parquet` + `sales.parquet` |
 | `process_berks.py` | **Complete** | Validates `berks_parcels.parquet` + `sales.parquet` schema, key uniqueness, null rates, and coverage stats; run after download to confirm files are pipeline-ready |
 | `run_01_assemble.py` | Ready | Merge parcels + sales; tag model groups; enrich with census/OSM |
-| `check_census_and_patch.py` | **First run only** | Verify `census_tract` fill rate ≥80%; add it to `main`/`hedonic` `ind_vars` in `settings.json` |
+| `check_census_and_patch.py` | **Unused** | Originally intended to add `census_tract` to `ind_vars`, but openavmkit's census enrichment does not produce a `census_tract` ID column — it produces socioeconomic aggregates (`median_income` etc.) instead. Script is not part of the normal pipeline run. |
 | `run_02_clean.py` | Ready | Horizontal equity clustering; sales scrutiny; null-fill |
 | `run_03_model.py` | Ready | Berks enrichment + LightGBM training (main + vacant) |
 
@@ -128,7 +127,13 @@ Confirmed source columns (from Berks County GIS server, verified against live da
 | `bldg_bsmt_type` | `BSMT` | CAMA Residential | Basement type code |
 | `bldg_garage_cars` | `BASE_GARAGE` | CAMA Residential | Basement garage car count |
 | `bldg_fireplaces` | derived | CAMA Residential | `WBFP_OPENINGS + MET_FIREPL` |
-| `census_tract` | `census_tract` | openavmkit Census enrichment | Non-functional without Census API key |
+| `median_income` | derived | openavmkit Census enrichment | Median household income at census block group level |
+| `total_population` | derived | openavmkit Census enrichment | Total population at census block group level |
+| `median_g_rent` | derived | openavmkit Census enrichment | Median gross rent at census block group level |
+| `median_c_rent` | derived | openavmkit Census enrichment | Median contract rent at census block group level |
+| `dist_to_osm_parks` | derived | openavmkit OSM enrichment | Distance to nearest park (km) |
+| `dist_to_osm_water_bodies` | derived | openavmkit OSM enrichment | Distance to nearest water body (km) |
+| `dist_to_osm_educational` | derived | openavmkit OSM enrichment | Distance to nearest university/college (km) |
 | `is_vacant` | derived | | Zero SFLA and zero `assr_impr_value` |
 
 **Zoning is not available in the Berks GIS data and has been removed from the model.**
@@ -138,8 +143,8 @@ CAMA Residential FeatureServer: `https://services3.arcgis.com/dGYe1jDYrTw1wwpc/a
 CAMA data dictionary PDF: in `data/us-pa-berks/in/` (downloaded from opendata.berkspa.gov)
 
 #### `data.process`
-- **Census enrichment:** FIPS `42011` — **currently non-functional** (no Census API key set); `census_tract` will be absent from output and must not appear in `ind_vars`
-- **OSM enrichment:** `distances` enrichment enabled — parks (2km), water_bodies (5km), educational (3km), transportation (2km); aggregate `dist_to_osm_*` columns only (`store_top: false`). Note: the formerly-used `"osm": {"enabled": true}` key was silently ignored by the library; the correct key is `distances`.
+- **Census enrichment:** FIPS `42011` — requires `CENSUS_API_KEY` in `notebooks/.env`. Produces socioeconomic aggregates at census block group level (`median_income`, `total_population`, `median_g_rent`, `median_c_rent`). Does **not** produce a `census_tract` ID column — openavmkit's enrichment joins block group stats, not tract IDs.
+- **OSM enrichment:** `distances` enrichment enabled — parks (2km), water_bodies (5km), educational (3km); aggregate `dist_to_osm_*` columns only (`store_top: false`). Transportation is configured but returns empty (Berks has no passenger rail; openavmkit queries `railway: [rail, subway, light_rail, monorail, tram]`). **Important:** each per-feature config in `settings.json` must include `"enabled": true` — openavmkit's `get_features()` checks this flag on the per-feature dict, not the top-level `distances` dict.
 - **Null-fill:** `median_impr` for 7 building fields (`bldg_condition_num`, `bldg_stories`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_rooms_bed`, `bldg_garage_cars`, `bldg_fireplaces`); `zero` for `bldg_area_finished_sqft`
 - **Dupe handling:** drop on `key` (parcels), drop on `key_sale` (sales)
 
@@ -159,9 +164,9 @@ Four groups, filtered by `category_code` or `is_vacant`:
 | `vacant` | `is_vacant == true` |
 
 #### `modeling.models` — independent variables
-- **main** (25 features): `bldg_area_finished_sqft`, `land_area_sqft`, `bldg_condition_num`, `bldg_age_years`, `bldg_rooms_bed`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_stories`, `bldg_garage_cars`, `bldg_fireplaces`, `bldg_ext_wall`, `bldg_bsmt_type`, `dist_to_cbd`, `dist_to_osm_parks`, `dist_to_osm_water_bodies`, `dist_to_osm_educational`, `dist_to_osm_transportation`, `latitude_norm`, `longitude_norm`, `polar_radius`, `polar_angle`, `geom_aspect_ratio`, `neighborhood`, `school_district`, `bldg_type`
-- **vacant** (13 features): `land_area_sqft`, `land_area_sqft_log`, `latitude_norm`, `longitude_norm`, `polar_angle`, `polar_radius`, `geom_rectangularity_num`, `dist_to_cbd`, `dist_to_osm_parks`, `dist_to_osm_water_bodies`, `dist_to_osm_transportation`, `neighborhood`, `school_district`
-- **hedonic** (26 features): `bldg_area_finished_sqft`, `land_area_sqft`, `land_area_sqft_log`, `bldg_condition_num`, `bldg_age_years`, `bldg_rooms_bed`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_stories`, `bldg_garage_cars`, `bldg_fireplaces`, `bldg_ext_wall`, `bldg_bsmt_type`, `bldg_type`, `dist_to_cbd`, `dist_to_osm_parks`, `dist_to_osm_water_bodies`, `dist_to_osm_educational`, `dist_to_osm_transportation`, `latitude_norm`, `longitude_norm`, `polar_radius`, `polar_angle`, `geom_aspect_ratio`, `neighborhood`, `school_district`
+- **main** (26 features): `bldg_area_finished_sqft`, `land_area_sqft`, `bldg_condition_num`, `bldg_age_years`, `bldg_rooms_bed`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_stories`, `bldg_garage_cars`, `bldg_fireplaces`, `bldg_ext_wall`, `bldg_bsmt_type`, `dist_to_cbd`, `dist_to_osm_parks`, `dist_to_osm_water_bodies`, `dist_to_osm_educational`, `median_income`, `median_g_rent`, `latitude_norm`, `longitude_norm`, `polar_radius`, `polar_angle`, `geom_aspect_ratio`, `neighborhood`, `school_district`, `bldg_type`
+- **vacant** (15 features): `land_area_sqft`, `land_area_sqft_log`, `latitude_norm`, `longitude_norm`, `polar_angle`, `polar_radius`, `geom_rectangularity_num`, `dist_to_cbd`, `dist_to_osm_parks`, `dist_to_osm_water_bodies`, `dist_to_osm_educational`, `median_income`, `median_g_rent`, `neighborhood`, `school_district`, `cat_is_residential`, `cat_is_commercial`, `cat_is_industrial`, `cat_is_farm`
+- **hedonic** (27 features): `bldg_area_finished_sqft`, `land_area_sqft`, `land_area_sqft_log`, `bldg_condition_num`, `bldg_age_years`, `bldg_rooms_bed`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_stories`, `bldg_garage_cars`, `bldg_fireplaces`, `bldg_ext_wall`, `bldg_bsmt_type`, `bldg_type`, `dist_to_cbd`, `dist_to_osm_parks`, `dist_to_osm_water_bodies`, `dist_to_osm_educational`, `median_income`, `median_g_rent`, `latitude_norm`, `longitude_norm`, `polar_radius`, `polar_angle`, `geom_aspect_ratio`, `neighborhood`, `school_district`
 
 #### `modeling.instructions`
 - Main + vacant + hedonic: `["lightgbm"]`
@@ -279,13 +284,18 @@ CAMA Commercial FeatureServer: `https://services3.arcgis.com/dGYe1jDYrTw1wwpc/ar
 
 - Python 3.11+ required
 - Install openavmkit: `pip install openavmkit`
-- No `requirements.txt` or `pyproject.toml` in the repo; only external dependency is `openavmkit`
+- No `requirements.txt` or `pyproject.toml` in the repo; external dependencies are `openavmkit` and `python-dotenv`
 - `matplotlib` must use `"Agg"` backend (set in `run_03_model.py`) to prevent GUI hangs in subprocess execution
 - `PYTHONIOENCODING=utf-8` and `PYTHONUNBUFFERED=1` set in all pipeline scripts
 
 ## Published Results (tracked)
 
 `results/ratio_study/{group}/ratio_study.{html,md}` — manually copied from `out/models/*/reports/` after a meaningful pipeline run. Update these when the model improves significantly.
+
+**Current results (2026-04-01):** First run with OSM + census enrichment active.
+- `residential_sf`: median_ratio=1.00, COD=12.8 (trimmed) — excellent
+- `vacant`: median_ratio=1.01, COD=23.6 (trimmed) — well-calibrated
+- `commercial`: median_ratio=3.7–4.1 — data sparsity / no income data
 
 ## Data Files (gitignored)
 
