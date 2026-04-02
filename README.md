@@ -17,7 +17,7 @@ County seat: Reading, PA. FIPS: 42011.
 
 ### Model Performance
 
-Vacant land is valued by three sub-models corresponding to model groups:
+Results by model group (residential SF shown in full; other groups have limited test sales):
 
 | Model | Test Sales | Median Ratio | MAPE | Notes |
 |---|---|---|---|---|
@@ -28,9 +28,11 @@ Vacant land is valued by three sub-models corresponding to model groups:
 
 *Median ratio = predicted ÷ time-adjusted sale price. MAPE omitted where model collapses or fewer than 15 trimmed sales.*
 
-The residential SF model is well-calibrated (median ratio 1.00, MAPE 11.4%), comparable to professional mass appraisal standards. The residential vacant lot model is now also well-calibrated (ratio 1.01) after correcting a sales scrutiny issue where synthetic month-start dates caused legitimate sales to be misflagged. Commercial vacant and farm/exempt vacant land remain challenging due to sparse sales and high price variance.
+The pipeline trains four model groups: `residential_sf` (CLASS=R), `residential_mf` (CLASS=A apartments), `commercial` (CLASS=C/I), and `vacant` (parcels with zero building area and zero assessed improvement value). The residential SF model is well-calibrated (median ratio 1.00, MAPE 11.4%), comparable to professional mass appraisal standards. The residential vacant lot model is now also well-calibrated (ratio 1.01) after correcting a sales scrutiny issue where synthetic month-start dates caused legitimate sales to be misflagged. Commercial vacant and farm/exempt vacant land remain challenging due to sparse sales and high price variance.
 
-Model inputs for residential SF: building area, land area, condition, age, bedrooms, bathrooms (full + half), stories, garage cars, fireplaces, exterior wall type, basement type, building style (architectural type), distance to Reading City Hall, lat/lon, polar coordinates, parcel aspect ratio, municipality, and school district. Training uses sales from 2021 onward.
+A hedonic model is also trained per model group to decompose value into land and improvement components. The `hedonic_full` sub-model (predicting total market value) matches main model accuracy; the `hedonic_land` sub-model (predicting land-only value) is currently unreliable for improved parcels — it over-predicts land values by inflating the land fraction due to location–quality correlation. See `CLAUDE.md` for details.
+
+Model inputs for residential SF (31 features): building area, land area, condition, age, bedrooms, bathrooms (full + half), stories, garage cars, fireplaces, exterior wall type, basement type, architectural style (`bldg_type`), distance to Reading City Hall, distances to nearest park/water body/university/highway on-ramp (OSM), median household income and median gross rent (Census block group), lat/lon, polar coordinates, parcel aspect ratio, municipality, school district, and commercial fields (land use code, commercial building area, structure type, parking spaces, living units). Training uses sales from 2021 onward.
 
 ### Assessment Ratios (Current vs. Market)
 
@@ -49,7 +51,7 @@ Berks County's last general reassessment was in 1994. Properties are assessed at
 Requires Python 3.11+ and [OpenAVMKit](https://github.com/larsiusprime/openavmkit):
 
 ```bash
-pip install openavmkit geopandas shapely pyarrow requests
+pip install openavmkit python-dotenv geopandas shapely pyarrow requests
 ```
 
 Several bugs in the installed `openavmkit` library require patching before the pipeline will run. See `CLAUDE.md` for the full list of patched files and functions.
@@ -62,6 +64,7 @@ Located in `notebooks/pipeline/`. Run scripts in order from that directory:
 cd notebooks/pipeline
 
 python download_berks_parcels.py   # Download parcels + CAMA from Berks County GIS
+python process_berks.py            # Validate downloaded files (schema, nulls, coverage)
 python run_01_assemble.py          # Assemble parcels + sales; enrich with census/OSM
 python run_02_clean.py             # Sales scrutiny and data cleaning
 python run_03_model.py             # Train valuation models and generate ratio studies
@@ -69,8 +72,8 @@ python run_03_model.py             # Train valuation models and generate ratio s
 
 | Script | Status |
 |---|---|
-| `download_berks_parcels.py` | Complete — downloads parcel geometry, CAMA_Master (values), CAMA Residential (building attributes + sale history) |
-| `process_berks.py` | Data validation — checks schema, key uniqueness, null rates, CLASS distribution, sales volume |
+| `download_berks_parcels.py` | Complete — downloads parcel geometry, CAMA_Master (assessment values), CAMA Residential (building attributes + sale history), and CAMA Commercial (commercial building attributes + sale history) |
+| `process_berks.py` | Complete — validates `berks_parcels.parquet` + `sales.parquet` schema, key uniqueness, null rates, and coverage stats; run after download to confirm files are pipeline-ready |
 | `run_01_assemble.py` | Ready |
 | `run_02_clean.py` | Ready |
 | `run_03_model.py` | Ready |
@@ -82,8 +85,9 @@ Input data (`notebooks/pipeline/data/us-pa-berks/`) is not tracked in git due to
 **Sources:**
 - Parcel geometry + CLASS/ACREAGE/MUNICIPALNAME: [ParcelSearchTable MapServer, Layer 0](https://gis.co.berks.pa.us/arcgis/rest/services/Assess/ParcelSearchTable/MapServer/0)
 - Assessment values (LAND_VALUE, BLDG_VALUE, TOTAL_VALUE): [CAMA_Master, Layer 3](https://gis.co.berks.pa.us/arcgis/rest/services/Assess/ParcelSearchTable/MapServer/3)
-- Building attributes + sale history: [CAMA Residential FeatureServer/15](https://services3.arcgis.com/dGYe1jDYrTw1wwpc/arcgis/rest/services/Berks_Assessment_CAMA_Residential_File/FeatureServer/15)
+- Residential building attributes + sale history: [CAMA Residential FeatureServer/15](https://services3.arcgis.com/dGYe1jDYrTw1wwpc/arcgis/rest/services/Berks_Assessment_CAMA_Residential_File/FeatureServer/15)
+- Commercial/industrial building attributes + sale history: [CAMA Commercial FeatureServer/13](https://services3.arcgis.com/dGYe1jDYrTw1wwpc/arcgis/rest/services/Berks_Assessment_CAMA_Commercial_File/FeatureServer/13)
 
-**Universe:** 156,469 parcels — 133,855 residential (CLASS=R), 9,174 commercial/industrial, 6,996 vacant, 256 apartment, 6,188 farm/exempt.
+**Universe:** 156,778 parcels — 133,855 residential (CLASS=R), 9,174 commercial/industrial, 6,996 vacant, 256 apartment (CLASS=A), 6,188 farm/exempt.
 
-**Sales:** 78,258 extracted from CAMA Residential history fields (2018–present); 60,058 valid (≥ $10k); 18,905 retained after sales scrutiny.
+**Sales:** Extracted from CAMA Residential, CAMA Commercial, and CAMA_Master history fields (2018–present); 60,058 valid (≥ $10k); 18,905 retained after sales scrutiny.
