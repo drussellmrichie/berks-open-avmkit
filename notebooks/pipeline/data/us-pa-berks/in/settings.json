@@ -59,7 +59,12 @@
       "enrich": {
         "census": {
           "enabled": true,
-          "fips": "42011"
+          "fips": "42011",
+          "extra_variables": {
+            "B25077_001E": "median_home_value",
+            "B25003_001E": "total_occupied_units",
+            "B25003_002E": "owner_occupied_units"
+          }
         },
         "distances": {
           "enabled": true,
@@ -97,6 +102,30 @@
             "max_distance": 10,
             "unit": "km",
             "store_top": false
+          },
+          "groceries": {
+            "enabled": true,
+            "osm": true,
+            "osm_tags": {"shop": ["supermarket", "grocery"]},
+            "max_distance": 3,
+            "unit": "km",
+            "store_top": false
+          },
+          "shopping": {
+            "enabled": true,
+            "osm": true,
+            "osm_tags": {"shop": ["mall", "department_store"]},
+            "max_distance": 5,
+            "unit": "km",
+            "store_top": false
+          },
+          "medical": {
+            "enabled": true,
+            "osm": true,
+            "osm_tags": {"amenity": ["hospital", "clinic"]},
+            "max_distance": 5,
+            "unit": "km",
+            "store_top": false
           }
         }
       },
@@ -126,7 +155,7 @@
   "modeling": {
     "metadata": {
       "valuation_date": "2026-01-01",
-      "use_sales_from": 2021,
+      "use_sales_from": 2019,
       "modeler": "MUSA",
       "modeler_nick": "musa"
     },
@@ -174,7 +203,7 @@
         "run": ["lightgbm"]
       },
       "time_adjustment": {
-        "period": "Q"
+        "period": "M"
       },
       "ensemble": [],
       "allocation": []
@@ -200,8 +229,13 @@
             "dist_to_osm_water_bodies",
             "dist_to_osm_educational",
             "dist_to_osm_highway_on_ramps",
+            "dist_to_osm_groceries",
+            "dist_to_osm_shopping",
+            "dist_to_osm_medical",
             "median_income",
             "median_g_rent",
+            "median_home_value",
+            "pct_owner_occupied",
             "latitude_norm",
             "longitude_norm",
             "polar_radius",
@@ -228,15 +262,22 @@
             "polar_angle",
             "polar_radius",
             "geom_rectangularity_num",
+            "land_compactness",
             "dist_to_cbd",
             "dist_to_osm_parks",
             "dist_to_osm_water_bodies",
             "dist_to_osm_educational",
             "dist_to_osm_highway_on_ramps",
+            "dist_to_osm_groceries",
+            "dist_to_osm_shopping",
+            "dist_to_osm_medical",
             "median_income",
             "median_g_rent",
+            "median_home_value",
+            "pct_owner_occupied",
             "neighborhood",
             "school_district",
+            "geom_aspect_ratio",
             "cat_is_residential",
             "cat_is_commercial",
             "cat_is_industrial",
@@ -267,8 +308,13 @@
             "dist_to_osm_water_bodies",
             "dist_to_osm_educational",
             "dist_to_osm_highway_on_ramps",
+            "dist_to_osm_groceries",
+            "dist_to_osm_shopping",
+            "dist_to_osm_medical",
             "median_income",
             "median_g_rent",
+            "median_home_value",
+            "pct_owner_occupied",
             "latitude_norm",
             "longitude_norm",
             "polar_radius",
@@ -290,13 +336,9 @@
         "name": "Residential (CLASS=R)",
         "filter": ["==", "category_code", "str:R"]
       },
-      "residential_mf": {
-        "name": "Apartment (CLASS=A)",
-        "filter": ["==", "category_code", "str:A"]
-      },
       "commercial": {
-        "name": "Commercial/Industrial (CLASS=C or I)",
-        "filter": ["isin", "category_code", ["C", "I"]]
+        "name": "Commercial/Industrial/Apartment (CLASS=C, I, or A)",
+        "filter": ["isin", "category_code", ["C", "I", "A"]]
       },
       "vacant": {
         "name": "Vacant land",

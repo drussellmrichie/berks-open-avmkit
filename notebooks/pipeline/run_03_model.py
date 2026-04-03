@@ -19,7 +19,7 @@ if repo_root not in sys.path:
 # ---------------------------------------------------------------------------
 from berks_helpers import (
     CITY_HALL_LAT, CITY_HALL_LON, _IMPR_FILL_MEDIAN,
-    add_dist_to_cbd, fill_universe_nulls,
+    add_dist_to_cbd, add_land_shape_features, add_census_derived_features, fill_universe_nulls,
 )
 
 locality = "us-pa-berks"
@@ -85,6 +85,15 @@ write_parquet(sup.sales,    "out/look/3-spatial-lag-sales.parquet")
 # Applied after checkpoint load so it survives the spatial-lag cache restore.
 print("  Adding dist_to_cbd from Reading City Hall coordinates ...")
 sup.universe = add_dist_to_cbd(sup.universe)
+
+print("  Computing derived census features (median_home_value sentinel cleanup, pct_owner_occupied) ...")
+sup.universe = add_census_derived_features(sup.universe)
+
+print("  Computing lot compactness (perimeter / sqrt(area), UTM Zone 18N) ...")
+sup.universe = add_land_shape_features(sup.universe)
+if "land_compactness" in sup.universe.columns:
+    vals = sup.universe["land_compactness"].dropna()
+    print(f"    land_compactness: median={vals.median():.2f}, min={vals.min():.2f}, max={vals.max():.2f}")
 print(f"  dist_to_cbd: min={sup.universe['dist_to_cbd'].min():.3f} mi, "
       f"max={sup.universe['dist_to_cbd'].max():.3f} mi")
 

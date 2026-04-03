@@ -39,6 +39,73 @@ def add_dist_to_cbd(df):
     return df
 
 
+def add_land_shape_features(df):
+    """Compute lot compactness index: perimeter / sqrt(area) in projected coordinates.
+
+    Uses UTM Zone 18N (EPSG:32618) for accurate distance/area over Berks County, PA.
+    Lower values = more compact (square-like); higher = more elongated or irregular.
+    Stored as 'land_compactness'. Complements geom_rectangularity_num / geom_aspect_ratio.
+    """
+    import geopandas as gpd
+    from shapely import wkt as shapely_wkt, wkb as shapely_wkb
+
+    if "geometry" not in df.columns:
+        print("    geometry column not found; skipping land_compactness")
+        return df
+
+    df = df.copy()
+    geom_col = df["geometry"]
+
+    # Determine geometry format and parse if needed
+    sample = geom_col.dropna().iloc[0] if len(geom_col.dropna()) > 0 else None
+    if sample is None:
+        df["land_compactness"] = np.nan
+        return df
+    if hasattr(sample, "geom_type"):
+        geoms = geom_col
+    elif isinstance(sample, str):
+        geoms = geom_col.apply(lambda x: shapely_wkt.loads(x) if pd.notna(x) else None)
+    else:
+        geoms = geom_col.apply(lambda x: shapely_wkb.loads(x) if x is not None else None)
+
+    gdf = gpd.GeoDataFrame(df.assign(geometry=geoms), geometry="geometry", crs="EPSG:4326")
+    gdf_proj = gdf.to_crs("EPSG:32618")  # UTM Zone 18N — metric, accurate for eastern PA
+
+    area = gdf_proj.geometry.area
+    perimeter = gdf_proj.geometry.length
+    safe_area = area.where(area > 0, other=np.nan)
+    df["land_compactness"] = (perimeter / np.sqrt(safe_area)).astype("float64")
+    return df
+
+
+def add_census_derived_features(df):
+    """Compute derived census fields from raw ACS counts pulled by extra_variables.
+
+    median_home_value  — already a normalized ratio; just null out census sentinel (-666666666).
+    pct_owner_occupied — owner_occupied_units / total_occupied_units (0–1 float).
+
+    Applied after the spatial-lag checkpoint in run_03_model.py so it always runs
+    on fresh data (not cached).
+    """
+    df = df.copy()
+    # Null-out census sentinel values (-666666666 signals a suppressed/missing estimate)
+    SENTINEL = -666666666
+    if "median_home_value" in df.columns:
+        df["median_home_value"] = df["median_home_value"].where(
+            df["median_home_value"] != SENTINEL, other=np.nan
+        )
+    # Compute owner-occupancy rate.
+    # Fair Housing note: pct_owner_occupied correlates with race/national origin in ways
+    # that could create disparate-impact exposure in an *official* assessment system.
+    # This model is research-only (LVT distributional analysis); no tax bills are set
+    # from these predictions. If this ever feeds an official assessment, drop this variable
+    # and re-evaluate median_home_value as well.
+    if "owner_occupied_units" in df.columns and "total_occupied_units" in df.columns:
+        total = df["total_occupied_units"].replace(0, np.nan)
+        df["pct_owner_occupied"] = (df["owner_occupied_units"] / total).astype("float64")
+    return df
+
+
 def fill_universe_nulls(universe):
     """Fill NaN building characteristics in the universe with per-model-group medians
     (computed on improved parcels only). Mirrors settings fill.median_impr prescription."""

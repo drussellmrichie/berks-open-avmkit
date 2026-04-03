@@ -31,6 +31,19 @@ python run_03_model.py
 
 `openavmkit` uses a checkpoint system (`out/checkpoints/`). Each `run_03_model.py` call clears the `3-model` checkpoints at startup (except the spatial-lag checkpoint `3-model-00-enrich-spatial-lag`, which is expensive to recompute). If you need a full fresh run, delete all files in `out/checkpoints/` manually.
 
+### When to delete checkpoints and cache
+
+There are two stale-data hazards: the `out/checkpoints/` pickle files and the `cache/*.cols.parquet` files written by `write_cached_df`.
+
+| Situation | What to delete |
+|---|---|
+| Re-running Stage 3 only (model config changed) | Nothing — `run_03_model.py` clears its own checkpoints automatically |
+| Re-running Stage 3 with a fresh spatial-lag | Delete `out/checkpoints/3-model-00-enrich-spatial-lag.pickle` manually, then run Stage 3 |
+| Re-running Stage 2 + 3 (Stage 1 output unchanged) | Delete `out/checkpoints/2-clean-*.pickle` before Stage 2 |
+| Full re-run from Stage 1 | Delete all `out/checkpoints/*.pickle` **and** `cache/he_id.cols.parquet`, `cache/impr_he_id.cols.parquet`, `cache/land_he_id.cols.parquet` — these cached column-signature files become stale when Stage 1 produces new features/rows, causing a corrupted-page read error in Stage 2's horizontal equity step |
+
+The OSM/census geometry cache (`cache/*.json`, `cache/osm/*.parquet`, `cache/census.cols.parquet`) is safe to keep across runs — it is keyed by query parameters, not by the parcel data itself.
+
 ## Architecture
 
 ### Repository Layout
@@ -162,14 +175,16 @@ CAMA data dictionary PDF: in `data/us-pa-berks/in/` (downloaded from opendata.be
 - `modeler`: `MUSA` / `musa`
 
 #### `modeling.model_groups`
-Four groups, filtered by `category_code` or `is_vacant`:
+Three groups (down from four), filtered by `category_code` or `is_vacant`:
 
-| Group | Filter |
-|---|---|
-| `residential_sf` | `category_code == "R"` |
-| `residential_mf` | `category_code == "A"` |
-| `commercial` | `category_code in ["C", "I"]` |
-| `vacant` | `is_vacant == true` |
+| Group | Filter | Notes |
+|---|---|---|
+| `residential_sf` | `category_code == "R"` | |
+| `commercial` | `category_code in ["C", "I", "A"]` | Apartments merged in — see note below |
+| `vacant` | `is_vacant == true` | Cross-cutting |
+
+**Why apartments (CLASS=A) are in the commercial group, not a separate group:**
+Berks has only ~256 CLASS=A parcels and fewer than 15 arm's-length apartment sales in any reasonable modeling window — not enough to train a standalone model. Apartment buildings are also structurally more similar to commercial than to single-family: they use CAMA Commercial building data (`livunits`, `bldg_area_commercial_sqft`, `bldg_com_struct`), have no CAMA Residential fields (`bldg_rooms_bed`, `bldg_rooms_bath`, etc.), and are income-producing assets whose value tracks closer to commercial cap-rate logic than single-family comps. Merging into commercial is a data-sparsity pragmatism combined with structural fit; if Berks ever develops a larger apartment transaction record, this group should be split out.
 
 #### `modeling.models` — independent variables
 - **main** (31 features): `bldg_area_finished_sqft`, `land_area_sqft`, `bldg_condition_num`, `bldg_age_years`, `bldg_rooms_bed`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_stories`, `bldg_garage_cars`, `bldg_fireplaces`, `bldg_ext_wall`, `bldg_bsmt_type`, `dist_to_cbd`, `dist_to_osm_parks`, `dist_to_osm_water_bodies`, `dist_to_osm_educational`, `dist_to_osm_highway_on_ramps`, `median_income`, `median_g_rent`, `latitude_norm`, `longitude_norm`, `polar_radius`, `polar_angle`, `geom_aspect_ratio`, `neighborhood`, `school_district`, `bldg_type`, `luc`, `bldg_area_commercial_sqft`, `bldg_com_struct`, `bldg_parking_spaces`, `livunits`
@@ -197,6 +212,14 @@ Four groups, filtered by `category_code` or `is_vacant`:
 
 1. **`add_dist_to_cbd(df)`** — Haversine distance (miles) from each parcel centroid to Reading City Hall (`40.3356°N, 75.9269°W`); stored as `dist_to_cbd`. Applied after spatial-lag checkpoint restore so it always runs on fresh data.
 2. **`fill_universe_nulls(universe)`** — Median-imputes 7 `_IMPR_FILL_MEDIAN` fields (`bldg_condition_num`, `bldg_stories`, `bldg_rooms_bath`, `bldg_rooms_bath_half`, `bldg_rooms_bed`, `bldg_garage_cars`, `bldg_fireplaces`) per model group on improved parcels. Falls back to global improved median if a group has no data. Also zero-fills `bldg_area_finished_sqft`.
+
+### Fair Housing / Legal Note on Census Features
+
+The model includes `pct_owner_occupied` (derived from ACS B25003) and `median_home_value` (ACS B25077) as independent variables. These variables correlate with race and national origin, which could create disparate-impact exposure under the Fair Housing Act in an **official** assessment context.
+
+**This model is research-only** (LVT distributional analysis; no tax bills are set from these predictions), so no legal obligation to exclude them currently applies. `median_income` — already in the model since the first run — carries similar or greater disparate-impact risk and is widely accepted in mass appraisal research.
+
+If this model ever feeds an official assessment instrument, `pct_owner_occupied` should be dropped first (it has weaker market-theory justification than the others), and `median_home_value` / `median_income` should be reviewed with legal counsel.
 
 ### Hedonic Model — Status and Limitations
 
@@ -306,12 +329,12 @@ CAMA Commercial FeatureServer: `https://services3.arcgis.com/dGYe1jDYrTw1wwpc/ar
 
 `results/ratio_study/{group}/ratio_study.{html,md}` — manually copied from `out/models/*/reports/` after a meaningful pipeline run. Update these when the model improves significantly.
 
-**Current results (2026-04-01):** Added CAMA Commercial building attributes (luc, bldg_area_commercial_sqft, bldg_com_struct, bldg_parking_spaces, livunits) to feature set.
-- `residential_sf` improved: median_ratio=1.03, COD=12.6 (trimmed) — excellent, unchanged from prior run
-- `residential_sf` vacant land: median_ratio=1.39, COD=73.6 (trimmed)
-- `vacant` standalone: median_ratio=1.87, COD=86.6 (trimmed)
-- `commercial` improved: median_ratio=2.73 (1 test sale — statistically meaningless)
-- `commercial` vacant land: median_ratio=3.85, COD=145.6 (trimmed) — improved from ~270 untrimmed prior run; still data-limited
+**Current results (2026-04-03):** Merged CLASS=A (apartments) into commercial group; added 3 OSM features (groceries, shopping, medical), 2 census features (median_home_value, pct_owner_occupied); extended training window to 2019; added land shape features (compactness) to vacant model.
+- `residential_sf` improved: median_ratio=1.02, COD=12.6 (trimmed) — excellent, unchanged from prior run
+- `residential_sf` vacant land: median_ratio=1.39, COD=77.2 (trimmed)
+- `vacant` standalone: median_ratio=1.79, COD=91.3 (trimmed)
+- `commercial` improved: median_ratio=3.03 (1 test sale — statistically meaningless)
+- `commercial` vacant land: median_ratio=4.31, COD=146.3 (trimmed) — data-limited; high ratio driven by data sparsity
 
 ## Data Files (gitignored)
 

@@ -17,22 +17,22 @@ County seat: Reading, PA. FIPS: 42011.
 
 ### Model Performance
 
-Results by model group (residential SF shown in full; other groups have limited test sales):
+Three model groups, evaluated on the 1-year study period (2025-01-01 – 2026-01-01):
 
-| Model | Test Sales | Median Ratio | MAPE | Notes |
+| Model | Study-period sales (trimmed) | Median Ratio | COD (trimmed) | Notes |
 |---|---|---|---|---|
-| Residential SF (improved) | 5,178 | 1.00 | 11.4% | Main model; excellent |
-| Residential SF (vacant lots) | 222 | 1.01 | 44.9% | R-category vacant lots; well-calibrated |
-| Commercial/Industrial (vacant) | 35 | 2.81 | — | Too heterogeneous; model collapses to mean |
-| Farm/Exempt (vacant) | 62 | 1.61 | — | F/E category vacant; limited sales volume |
+| Residential SF (improved) | 4,536 | 1.02 | 12.6 | Excellent — meets IAAO standards |
+| Residential SF (vacant lots) | 215 | 1.39 | 77.2 | R-category vacant; calibration challenging |
+| Commercial/Industrial/Apartment (vacant) | 29 | 4.31 | 146.3 | Data-limited; sparse sales |
+| Vacant (standalone cross-cutting model) | 51 | 1.79 | 91.3 | All vacant parcels across CLASS codes |
 
-*Median ratio = predicted ÷ time-adjusted sale price. MAPE omitted where model collapses or fewer than 15 trimmed sales.*
+*Median ratio = predicted ÷ time-adjusted sale price. COD = Coefficient of Dispersion (lower is better; IAAO standard ≤ 15 for residential improved).*
 
-The pipeline trains four model groups: `residential_sf` (CLASS=R), `residential_mf` (CLASS=A apartments), `commercial` (CLASS=C/I), and `vacant` (parcels with zero building area and zero assessed improvement value). The residential SF model is well-calibrated (median ratio 1.00, MAPE 11.4%), comparable to professional mass appraisal standards. The residential vacant lot model is now also well-calibrated (ratio 1.01) after correcting a sales scrutiny issue where synthetic month-start dates caused legitimate sales to be misflagged. Commercial vacant and farm/exempt vacant land remain challenging due to sparse sales and high price variance.
+The residential SF improved model meets IAAO standards (median ratio 1.02, COD 12.6). Vacant and commercial models remain challenging due to sparse arm's-length sales and high price heterogeneity — the commercial group had only 1 improved test sale in the study period.
 
 A hedonic model is also trained per model group to decompose value into land and improvement components. The `hedonic_full` sub-model (predicting total market value) matches main model accuracy; the `hedonic_land` sub-model (predicting land-only value) is currently unreliable for improved parcels — it over-predicts land values by inflating the land fraction due to location–quality correlation. See `CLAUDE.md` for details.
 
-Model inputs for residential SF (31 features): building area, land area, condition, age, bedrooms, bathrooms (full + half), stories, garage cars, fireplaces, exterior wall type, basement type, architectural style (`bldg_type`), distance to Reading City Hall, distances to nearest park/water body/university/highway on-ramp (OSM), median household income and median gross rent (Census block group), lat/lon, polar coordinates, parcel aspect ratio, municipality, school district, and commercial fields (land use code, commercial building area, structure type, parking spaces, living units). Training uses sales from 2021 onward.
+Model inputs for residential SF (31 features): building area, land area, condition, age, bedrooms, bathrooms (full + half), stories, garage cars, fireplaces, exterior wall type, basement type, architectural style, distance to Reading City Hall, lat/lon, polar coordinates, parcel aspect ratio, municipality, school district, distances to parks/water/schools/highway on-ramps/groceries/shopping/medical (OSM), median household income, median home value, and commercial fields (land use code, commercial building area, structure type, parking spaces, living units). Training uses sales from 2019 onward.
 
 ### Assessment Ratios (Current vs. Market)
 
@@ -86,8 +86,10 @@ Input data (`notebooks/pipeline/data/us-pa-berks/`) is not tracked in git due to
 - Parcel geometry + CLASS/ACREAGE/MUNICIPALNAME: [ParcelSearchTable MapServer, Layer 0](https://gis.co.berks.pa.us/arcgis/rest/services/Assess/ParcelSearchTable/MapServer/0)
 - Assessment values (LAND_VALUE, BLDG_VALUE, TOTAL_VALUE): [CAMA_Master, Layer 3](https://gis.co.berks.pa.us/arcgis/rest/services/Assess/ParcelSearchTable/MapServer/3)
 - Residential building attributes + sale history: [CAMA Residential FeatureServer/15](https://services3.arcgis.com/dGYe1jDYrTw1wwpc/arcgis/rest/services/Berks_Assessment_CAMA_Residential_File/FeatureServer/15)
-- Commercial/industrial building attributes + sale history: [CAMA Commercial FeatureServer/13](https://services3.arcgis.com/dGYe1jDYrTw1wwpc/arcgis/rest/services/Berks_Assessment_CAMA_Commercial_File/FeatureServer/13)
+- Commercial building attributes + sale history: [CAMA Commercial FeatureServer/13](https://services3.arcgis.com/dGYe1jDYrTw1wwpc/arcgis/rest/services/Berks_Assessment_CAMA_Commercial_File/FeatureServer/13)
+- Census enrichment: ACS 5-year estimates at census block group level (median income, median home value, median rent, owner-occupancy rate) via Census Bureau API
+- OSM enrichment: distances to parks, water bodies, schools, highway on-ramps, groceries, shopping centers, and medical facilities via OpenStreetMap/Overpass
 
-**Universe:** 156,778 parcels — 133,855 residential (CLASS=R), 9,174 commercial/industrial, 6,996 vacant, 256 apartment (CLASS=A), 6,188 farm/exempt.
+**Universe:** 156,778 parcels — 133,855 residential (CLASS=R), 9,174 commercial/industrial (CLASS=C/I), 256 apartment (CLASS=A), 6,188 farm/exempt (CLASS=F/E), remainder other/unknown.
 
-**Sales:** Extracted from CAMA Residential, CAMA Commercial, and CAMA_Master history fields (2018–present); 60,058 valid (≥ $10k); 18,905 retained after sales scrutiny.
+**Sales:** extracted from CAMA Residential + Commercial + Master history fields (2019–present); deduped and filtered for arm's-length transactions (≥ $10k, not bulk/portfolio sales).
