@@ -10,11 +10,10 @@ Ratio study reports by model group. Each subdirectory contains:
 
 | Group | Description |
 |---|---|
-| `residential_sf/` | CLASS=R parcels (133,855 parcels); main model MAPE 11.4% |
-| `residential_mf/` | CLASS=A apartment parcels (256 parcels); very few sales |
-| `commercial/` | CLASS=C and I parcels (9,174 parcels); high price variance |
-| `vacant/` | Farm/Exempt/unknown vacant parcels (6,996 parcels) |
+| `residential_sf/` | CLASS=R parcels (133,855 parcels); median ratio 1.02, COD 12.6 (trimmed) |
+| `commercial/` | CLASS=C, I, and A parcels (apartments merged in — 256 CLASS=A parcels have too few sales to model separately); median ratio 3.03 improved (1 test sale — statistically meaningless) |
+| `vacant/` | Cross-cutting vacant parcels; median ratio 1.79, COD 91.3 (trimmed) |
 
-Vacant lot valuation within residential_sf uses a separate sub-model (ratio 1.01, MAPE 44.9%). See the main README for full model performance table.
+Vacant lot valuation within residential_sf uses a separate sub-model (median ratio 1.39, COD 77.2 trimmed). See the main README for full model performance table.
 
-**Run date:** 2026-03-31
+**Run date:** 2026-04-03
