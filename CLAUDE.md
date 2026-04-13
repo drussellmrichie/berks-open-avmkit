@@ -241,14 +241,17 @@ The same patches applied to `philly_open_avmkit` are required here. See `philly_
 | File | Functions/locations patched | Problem fixed |
 |---|---|---|
 | `utilities/stats.py` | `calc_elastic_net_regularization`, `calc_p_values_recursive_drop`, `calc_t_values_recursive_drop`, `calc_vif_recursive_drop` | `select_dtypes(include="number")` to drop string/categorical columns before linear fits; median-impute NaN before sklearn/statsmodels fits |
-| `shap_analysis.py` | `make_shap_table` | `if list_keys_sale` → `_has_sale_keys` to avoid numpy array truth-value error |
+| `shap_analysis.py` | `make_shap_table` | (1) `if list_keys_sale` → `_has_sale_keys` to avoid numpy array truth-value error; (2) warn + filter instead of raising `ValueError` when `list_vars` contains features dropped by variable selection |
 | `modeling.py` | `_contrib_to_unit_values`, `_add_prediction_to_contribution` | Positional concat instead of key-based merge to prevent OOM cartesian product |
-| `pipeline.py` | `finalize_models` | Added `run_main/vacant/hedonic/ensemble` params (were hardcoded `True`) |
+| `pipeline.py` | `finalize_models` | Added `run_main/vacant/hedonic/ensemble`, `do_shaps`, `do_plots`, `do_contributions` params (were hardcoded) |
+| `data.py` | module-level import | `from scipy.spatial._ckdtree import cKDTree` → `from scipy.spatial import cKDTree` (private submodule removed in scipy >= 1.14) |
 | `data.py` | `_handle_duplicated_rows` | Default `sort_by` had key `"asc"` instead of `"ascendings"` — KeyError when parcels have duplicate keys |
-| `data.py` | `_basic_geo_enrichment` | `land_area_sqft` cast to int64 then float GIS values assigned into it — newer pandas raises; fix: round+astype(int) the RHS |
-| `utilities/cache.py` | `write_cached_df` | `ArrowExtensionArray` has no `.sum()` — wrap in `pd.Series()` |
+| `data.py` | `_basic_geo_enrichment` | Moved `astype(int)` cast to after `.loc` override — pandas 2.x rejects float→int64 assignment via `.loc` |
+| `sales_scrutiny_study.py` | `SalesScrutinyStudy.__init__` | `.astype(object)` before `.astype(str)` on `ss_id` and `model_group`; avoids `ArrowNotImplementedError` on null-dtype columns with pyarrow >= 22 |
+| `tuning.py` | `_lightgbm_rolling_origin_cv` | `if len(X) < n_splits: return float("inf")` guard; sparse model groups with fewer samples than CV splits crashed `KFold.split()` |
+| `utilities/cache.py` | `write_cached_df` | Replace `col.values == col_orig.values` with `col.eq(col_orig)` and wrap `.sum()` in `int()` — `ArrowExtensionArray` has no `.values` sum |
 | `utilities/data.py` | `div_series_z_safe` | `to_numpy(dtype=np.float64)` fails on Arrow-backed nullable columns — add `na_value=np.nan` |
-| `utilities/stats.py` | `calc_correlations` | `df_score` unbound if loop breaks on first pass (all-NA scores in small model groups) — initialize to `None` and early-return empty DataFrame |
+| `utilities/stats.py` | `calc_correlations` | Multiple guards for sparse/small model groups: empty `naive_corr` early-exit; all-NA score `break`; `len(remaining) <= 1` early return with correct schema; `.columns.tolist()[0]` for Arrow-backed Index compat |
 | `ratio_study.py` | `_run_ratio_study_breakdowns` | `np.quantile` returns NaN for all-NaN columns; NaN passes `not in bins` check and breaks `pd.cut` — skip NaN quantile values and guard for `len(bins) < 2` |
 | `utilities/stats.py` | `calc_r2` | `.astype(float)` on Arrow-backed string columns (e.g. `luc`, `bldg_com_struct`) raises `ValueError`; add `pd.api.types.is_numeric_dtype` guard to skip non-numeric vars with NaN R² |
 
