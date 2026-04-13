@@ -23,9 +23,25 @@ catboost_info/
 # Secrets
 .env
 
+# Virtual environments
+venv/
+.venv/
+
+# Distribution / packaging
+dist/
+
+# Testing
+.pytest_cache/
+
+# OS
+.DS_Store
+
 # Windows
 desktop.ini
 Thumbs.db
 
 # Claude Code project memory
 .claude/
+
+# Pipeline run logs
+*.log
